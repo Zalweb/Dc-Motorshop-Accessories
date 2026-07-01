@@ -1,0 +1,60 @@
+name: dc-motorshop
+
+services:
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    environment:
+      ENV: dev
+      DATABASE_URL: postgresql+asyncpg://dc:dc@postgres:5432/dc_motorshop
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-only-change-me
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_BUCKET: dc-motorshop
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    ports:
+      - "8000:8000"
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dc
+      POSTGRES_PASSWORD: dc
+      POSTGRES_DB: dc_motorshop
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dc -d dc_motorshop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:

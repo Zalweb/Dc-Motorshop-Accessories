@@ -1,0 +1,46 @@
+name: backend-ci
+
+# NOTE: GitHub only runs workflows from the repository-root .github/workflows/.
+# This file lives under backend/ per BACKEND_TASKS.md M0. To activate it on GitHub,
+# copy/symlink it to <repo-root>/.github/workflows/backend-ci.yml (with the path filter below).
+
+on:
+  push:
+    paths:
+      - "backend/**"
+  pull_request:
+    paths:
+      - "backend/**"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.8"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Security static analysis (bandit)
+        run: uv run bandit -c pyproject.toml -r app
+
+      - name: Dependency CVE audit (pip-audit)
+        run: uv run pip-audit
+
+      - name: Tests (pytest)
+        run: uv run pytest -q

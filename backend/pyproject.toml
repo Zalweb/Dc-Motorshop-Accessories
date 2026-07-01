@@ -1,0 +1,65 @@
+[project]
+name = "dc-motorshop-backend"
+version = "0.1.0"
+description = "Secured FastAPI backend for DC Motorshop & Accessories — cloud sync + backup."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlmodel>=0.0.22",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "pydantic-settings>=2.6",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.10",
+    "redis>=5.2",
+    "boto3>=1.35",
+    "python-multipart>=0.0.18",
+    "email-validator>=2.2",
+    # zoneinfo needs an explicit tz database on Windows and slim Linux images
+    # (dashboard summaries are computed in Asia/Manila).
+    "tzdata>=2025.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "pip-audit>=2.7",
+    "bandit>=1.8",
+    "ruff>=0.8",
+    "testcontainers[postgres]>=4.8",
+    "psycopg2-binary>=2.9",
+    "fakeredis>=2.26",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+# B008: Depends()/Security() in argument defaults is the intended FastAPI idiom.
+ignore = ["B008"]
+# S101 (assert) is fine in tests; handled per-file below.
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use asserts and hardcoded fixture credentials by design.
+"tests/**" = ["S101", "S105", "S106", "S107"]
+"migrations/**" = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    # Tests run with the short dev default secret; prod uses a 48-byte secret (see .env.example).
+    "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "migrations", ".venv"]
+
+[tool.uv]
+package = false
