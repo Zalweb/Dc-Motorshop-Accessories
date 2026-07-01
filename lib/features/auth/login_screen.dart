@@ -20,7 +20,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _loginFormKey = GlobalKey<FormState>();
+  final _registerFormKey = GlobalKey<FormState>();
 
   // Shared controllers
   final _email = TextEditingController();
@@ -69,7 +70,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_activeTab == AuthTab.login) {
+      if (!_loginFormKey.currentState!.validate()) return;
+    } else {
+      if (!_registerFormKey.currentState!.validate()) return;
+    }
 
     final controller = ref.read(authControllerProvider.notifier);
 
@@ -218,9 +223,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Form(
-                      key: _formKey,
-                      child: AnimatedCrossFade(
+                    child: AnimatedCrossFade(
                         duration: const Duration(milliseconds: 400),
                         crossFadeState: _activeTab == AuthTab.login ? CrossFadeState.showFirst : CrossFadeState.showSecond,
                         firstCurve: Curves.easeOutCubic,
@@ -232,7 +235,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -242,10 +244,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildLoginForm(ThemeData theme, bool isDark, bool isLoading) {
-    return Column(
-      key: const ValueKey('login_form'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return Form(
+      key: _loginFormKey,
+      child: Column(
+        key: const ValueKey('login_form'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         _buildField(
           label: 'Email',
           controller: _email,
@@ -286,14 +290,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 80),
       ],
+      ),
     );
   }
 
   Widget _buildRegisterForm(ThemeData theme, bool isDark, bool isLoading) {
-    return Column(
-      key: const ValueKey('register_form'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return Form(
+      key: _registerFormKey,
+      child: Column(
+        key: const ValueKey('register_form'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         _buildField(
           label: 'Username',
           controller: _username,
@@ -367,6 +374,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _buildSubmitButton('Sign up', theme, isDark, isLoading),
         const SizedBox(height: 40),
       ],
+      ),
     );
   }
 
