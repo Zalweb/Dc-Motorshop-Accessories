@@ -82,9 +82,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     });
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Theme-aware colors
+    final bgColor = theme.scaffoldBackgroundColor;
+    final curveColor = theme.colorScheme.surfaceContainer;
+    final textColor = theme.colorScheme.onSurface;
+    final inputBorderColor = theme.colorScheme.outlineVariant;
+    final pillBgColor = isDark ? const Color(0xFF333333) : const Color(0xFFE5E7EB);
+    final tabActiveBg = isDark ? const Color(0xFFE0E0E0) : Colors.white;
+    final tabActiveText = isDark ? const Color(0xFF222224) : Colors.black;
+    final tabInactiveText = isDark ? const Color(0xFF999999) : const Color(0xFF6B7280);
+
     return Scaffold(
-      // The background is the dark charcoal color from the design
-      backgroundColor: const Color(0xFF222224),
+      backgroundColor: bgColor,
       body: Stack(
         children: [
           // ── BACKGROUND SHAPES ──────────────────────────────────────────────
@@ -98,7 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: ClipPath(
               clipper: _TopCurveClipper(),
               child: Container(
-                color: Colors.white,
+                color: curveColor,
                 child: SafeArea(
                   child: Align(
                     alignment: const Alignment(0, -0.4),
@@ -122,7 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: ClipPath(
                 clipper: _BottomCurveClipper(),
                 child: Container(
-                  color: Colors.white,
+                  color: curveColor,
                   alignment: Alignment.bottomRight,
                   padding: const EdgeInsets.only(right: 24, bottom: 24),
                   child: Row(
@@ -131,7 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Text(
                         'Remember me',
                         style: AppTextStyles.body.copyWith(
-                          color: const Color(0xFF222224),
+                          color: textColor,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -139,10 +151,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Switch(
                         value: _rememberMe,
                         onChanged: (v) => setState(() => _rememberMe = v),
-                        activeThumbColor: const Color(0xFF222224),
-                        activeTrackColor: const Color(0xFFDCDCDC),
-                        inactiveThumbColor: Colors.white,
-                        inactiveTrackColor: const Color(0xFFDCDCDC),
+                        activeThumbColor: theme.colorScheme.primary,
+                        activeTrackColor: theme.colorScheme.primary.withOpacity(0.5),
+                        inactiveThumbColor: isDark ? Colors.white : Colors.grey.shade400,
+                        inactiveTrackColor: isDark ? const Color(0xFF555555) : const Color(0xFFDCDCDC),
                       ),
                     ],
                   ),
@@ -163,13 +175,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     height: 48,
                     width: size.width * 0.7,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF333333),
+                      color: pillBgColor,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Row(
                       children: [
-                        Expanded(child: _buildTabButton('Login', AuthTab.login)),
-                        Expanded(child: _buildTabButton('Sign up', AuthTab.register)),
+                        Expanded(child: _buildTabButton('Login', AuthTab.login, tabActiveBg, tabActiveText, tabInactiveText)),
+                        Expanded(child: _buildTabButton('Sign up', AuthTab.register, tabActiveBg, tabActiveText, tabInactiveText)),
                       ],
                     ),
                   ),
@@ -228,26 +240,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: ElevatedButton(
                               onPressed: isLoading ? null : _submit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF222224),
+                                backgroundColor: theme.colorScheme.primary,
+                                foregroundColor: isDark ? const Color(0xFF222224) : Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 elevation: 0,
                               ),
                               child: isLoading
-                                  ? const SizedBox(
+                                  ? SizedBox(
                                       width: 24,
                                       height: 24,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2.5,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF222224)),
+                                        valueColor: AlwaysStoppedAnimation<Color>(isDark ? const Color(0xFF222224) : Colors.white),
                                       ),
                                     )
                                   : Text(
                                       _activeTab == AuthTab.login ? 'Login' : 'Sign up',
                                       style: AppTextStyles.button.copyWith(
-                                        color: const Color(0xFF222224),
+                                        color: isDark ? const Color(0xFF222224) : Colors.white,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -269,7 +281,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildTabButton(String text, AuthTab tab) {
+  Widget _buildTabButton(String text, AuthTab tab, Color activeBg, Color activeText, Color inactiveText) {
     final isActive = _activeTab == tab;
     return GestureDetector(
       onTap: () => setState(() => _activeTab = tab),
@@ -277,13 +289,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFE0E0E0) : Colors.transparent,
+          color: isActive ? activeBg : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Text(
           text,
           style: AppTextStyles.body.copyWith(
-            color: isActive ? const Color(0xFF222224) : const Color(0xFF999999),
+            color: isActive ? activeText : inactiveText,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
@@ -298,13 +310,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
+    final theme = Theme.of(context);
+    final textColor = theme.colorScheme.onSurface;
+    final borderColor = theme.colorScheme.outlineVariant;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: AppTextStyles.body.copyWith(
-            color: Colors.white,
+            color: textColor,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -313,24 +329,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           obscureText: obscureText,
           keyboardType: keyboardType,
           validator: validator,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: textColor,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
-          decoration: const InputDecoration(
-            contentPadding: EdgeInsets.symmetric(vertical: 8),
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
             isDense: true,
             border: UnderlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF444444)),
+              borderSide: BorderSide(color: borderColor),
             ),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF444444)),
+              borderSide: BorderSide(color: borderColor),
             ),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white),
+              borderSide: BorderSide(color: theme.colorScheme.primary),
             ),
-            errorBorder: UnderlineInputBorder(
+            errorBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.redAccent),
             ),
           ),

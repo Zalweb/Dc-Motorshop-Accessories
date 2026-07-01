@@ -17,19 +17,10 @@ class SplashScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // Background soft radial gradient
+          // Solid background color (handled by Scaffold)
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.center,
-                  radius: 1.2,
-                  colors: [
-                    primary.withOpacity(0.12),
-                    theme.scaffoldBackgroundColor,
-                  ],
-                ),
-              ),
+              color: theme.scaffoldBackgroundColor,
             ),
           ),
           SafeArea(

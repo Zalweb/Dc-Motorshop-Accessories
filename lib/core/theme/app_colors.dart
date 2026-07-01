@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 /// Design tokens for DC Motorcycle Inventory.
 /// Source of truth: AGENT.md → Design System → Colors.
 abstract final class AppColors {
-  // Backgrounds - premium midnight slate-navy theme (Dark Mode)
-  static const bgBase = Color(0xFF0C101B);
-  static const bgSurface = Color(0xFF151C2C);
-  static const bgSurface2 = Color(0xFF1E293B);
-  static const border = Color(0xFF222F47);
+  // Backgrounds - premium neutral dark theme (Dark Mode)
+  static const bgBase = Color(0xFF121212);
+  static const bgSurface = Color(0xFF1E1E1E);
+  static const bgSurface2 = Color(0xFF2C2C2C);
+  static const border = Color(0xFF333333);
 
   // Backgrounds - clean off-white theme (Light Mode)
   static const bgBaseLight = Color(0xFFFAFAFA);
