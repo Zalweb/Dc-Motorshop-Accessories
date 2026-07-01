@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:iconoir_flutter/iconoir_flutter.dart';
+import 'package:iconoir_flutter/iconoir_flutter.dart' as iconoir;
 
 import '../../core/theme/app_text_styles.dart';
 import '../../shared/widgets/brand_mark.dart';
@@ -229,7 +229,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               _buildField(
                                 label: 'Username',
                                 controller: _username,
-                                icon: const User(size: 20),
+                                icon: const iconoir.User(width: 20, height: 20),
                                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                               ),
                               const SizedBox(height: 20),
@@ -238,7 +238,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             _buildField(
                               label: 'Email',
                               controller: _email,
-                              icon: const Mail(size: 20),
+                              icon: const iconoir.Mail(width: 20, height: 20),
                               keyboardType: TextInputType.emailAddress,
                               validator: _emailValidator,
                             ),
@@ -247,7 +247,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             _buildField(
                               label: 'Password',
                               controller: _password,
-                              icon: const Lock(size: 20),
+                              icon: const iconoir.Lock(width: 20, height: 20),
                               obscureText: true,
                               validator: (v) => (v == null || v.length < 8) ? 'At least 8 chars' : null,
                             ),
@@ -257,7 +257,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               _buildField(
                                 label: 'Confirm password',
                                 controller: _confirm,
-                                icon: const CheckCircle(size: 20),
+                                icon: const iconoir.CheckCircle(width: 20, height: 20),
                                 obscureText: true,
                                 validator: (v) => v != _password.text ? 'Passwords do not match' : null,
                               ),
