@@ -32,6 +32,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   bool _rememberMe = false;
   late AuthTab _activeTab;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
@@ -218,106 +220,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Form(
                       key: _formKey,
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
+                      child: AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 400),
+                        crossFadeState: _activeTab == AuthTab.login ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                        firstCurve: Curves.easeOutCubic,
+                        secondCurve: Curves.easeOutCubic,
+                        sizeCurve: Curves.easeInOutCubic,
                         alignment: Alignment.topCenter,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (_activeTab == AuthTab.register) ...[
-                              _buildField(
-                                label: 'Username',
-                                controller: _username,
-                                icon: const iconoir.User(width: 20, height: 20),
-                                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                            
-                            _buildField(
-                              label: 'Email',
-                              controller: _email,
-                              icon: const iconoir.Mail(width: 20, height: 20),
-                              keyboardType: TextInputType.emailAddress,
-                              validator: _emailValidator,
-                            ),
-                            const SizedBox(height: 20),
-
-                            _buildField(
-                              label: 'Password',
-                              controller: _password,
-                              icon: const iconoir.Lock(width: 20, height: 20),
-                              obscureText: true,
-                              validator: (v) => (v == null || v.length < 8) ? 'At least 8 chars' : null,
-                            ),
-
-                            if (_activeTab == AuthTab.register) ...[
-                              const SizedBox(height: 20),
-                              _buildField(
-                                label: 'Confirm password',
-                                controller: _confirm,
-                                icon: const iconoir.CheckCircle(width: 20, height: 20),
-                                obscureText: true,
-                                validator: (v) => v != _password.text ? 'Passwords do not match' : null,
-                              ),
-                            ],
-
-                            const SizedBox(height: 40),
-
-                            // Action Button
-                            SizedBox(
-                              height: 56,
-                              child: ElevatedButton(
-                                onPressed: isLoading ? null : _submit,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.primary,
-                                  foregroundColor: isDark ? const Color(0xFF222224) : Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 4,
-                                  shadowColor: theme.colorScheme.primary.withOpacity(0.4),
-                                ),
-                                child: isLoading
-                                    ? SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                          valueColor: AlwaysStoppedAnimation<Color>(isDark ? const Color(0xFF222224) : Colors.white),
-                                        ),
-                                      )
-                                    : Text(
-                                        _activeTab == AuthTab.login ? 'Login' : 'Sign up',
-                                        style: AppTextStyles.button.copyWith(
-                                          color: isDark ? const Color(0xFF222224) : Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                            
-                            if (_activeTab == AuthTab.login) ...[
-                              const SizedBox(height: 16),
-                              Center(
-                                child: TextButton(
-                                  onPressed: () => context.push('/forgot-password'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: theme.colorScheme.primary,
-                                  ),
-                                  child: const Text(
-                                    'Forgot Password?',
-                                    style: TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            
-                            // Spacing at bottom
-                            SizedBox(height: _activeTab == AuthTab.login ? 80 : 40),
-                          ],
-                        ),
+                        firstChild: _buildLoginForm(theme, isDark, isLoading),
+                        secondChild: _buildRegisterForm(theme, isDark, isLoading),
                       ),
                     ),
                   ),
@@ -326,6 +237,169 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLoginForm(ThemeData theme, bool isDark, bool isLoading) {
+    return Column(
+      key: const ValueKey('login_form'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildField(
+          label: 'Email',
+          controller: _email,
+          icon: const iconoir.Mail(width: 20, height: 20),
+          keyboardType: TextInputType.emailAddress,
+          validator: _emailValidator,
+        ),
+        const SizedBox(height: 20),
+        _buildField(
+          label: 'Password',
+          controller: _password,
+          icon: const iconoir.Lock(width: 20, height: 20),
+          obscureText: _obscurePassword,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              size: 20,
+            ),
+            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+          ),
+          validator: (v) => (v == null || v.length < 8) ? 'At least 8 chars' : null,
+        ),
+        const SizedBox(height: 40),
+        _buildSubmitButton('Login', theme, isDark, isLoading),
+        const SizedBox(height: 16),
+        Center(
+          child: TextButton(
+            onPressed: () => context.push('/forgot-password'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.primary,
+            ),
+            child: const Text(
+              'Forgot Password?',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(height: 80),
+      ],
+    );
+  }
+
+  Widget _buildRegisterForm(ThemeData theme, bool isDark, bool isLoading) {
+    return Column(
+      key: const ValueKey('register_form'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildField(
+          label: 'Username',
+          controller: _username,
+          icon: const iconoir.User(width: 20, height: 20),
+          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+        ),
+        const SizedBox(height: 20),
+        _buildField(
+          label: 'Email',
+          controller: _email,
+          icon: const iconoir.Mail(width: 20, height: 20),
+          keyboardType: TextInputType.emailAddress,
+          validator: _emailValidator,
+        ),
+        const SizedBox(height: 20),
+        _buildField(
+          label: 'Password',
+          controller: _password,
+          icon: const iconoir.Lock(width: 20, height: 20),
+          obscureText: _obscurePassword,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              size: 20,
+            ),
+            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+          ),
+          validator: (v) => (v == null || v.length < 8) ? 'At least 8 chars' : null,
+        ),
+        const SizedBox(height: 20),
+        _buildField(
+          label: 'Confirm password',
+          controller: _confirm,
+          icon: const iconoir.CheckCircle(width: 20, height: 20),
+          obscureText: _obscureConfirm,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              size: 20,
+            ),
+            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+          ),
+          validator: (v) => v != _password.text ? 'Passwords do not match' : null,
+        ),
+        AnimatedBuilder(
+          animation: Listenable.merge([_password, _confirm]),
+          builder: (context, _) {
+            final hasText = _confirm.text.isNotEmpty;
+            final match = hasText && _confirm.text == _password.text;
+            return AnimatedOpacity(
+              opacity: hasText ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6, right: 8),
+                child: Text(
+                  match ? 'Passwords match' : 'Passwords do not match',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: match ? Colors.green : Colors.redAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 40),
+        _buildSubmitButton('Sign up', theme, isDark, isLoading),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton(String text, ThemeData theme, bool isDark, bool isLoading) {
+    return SizedBox(
+      height: 56,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: isDark ? const Color(0xFF222224) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 4,
+          shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(isDark ? const Color(0xFF222224) : Colors.white),
+                ),
+              )
+            : Text(
+                text,
+                style: AppTextStyles.button.copyWith(
+                  color: isDark ? const Color(0xFF222224) : Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
@@ -357,6 +431,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required String label,
     required TextEditingController controller,
     Widget? icon,
+    Widget? suffixIcon,
     bool obscureText = false,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
@@ -400,6 +475,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 data: IconThemeData(color: textColor.withOpacity(0.5)),
                 child: icon,
               ),
+            ) : null,
+            suffixIcon: suffixIcon != null ? Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: suffixIcon,
             ) : null,
             filled: true,
             fillColor: fillColor,
