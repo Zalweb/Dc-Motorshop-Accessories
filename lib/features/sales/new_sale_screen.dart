@@ -13,6 +13,7 @@ import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/search_field.dart';
 import 'cart_controller.dart';
 import 'cart_sheet.dart';
+import 'widgets/variant_selector_sheet.dart';
 
 class NewSaleScreen extends ConsumerStatefulWidget {
   const NewSaleScreen({super.key});
@@ -47,21 +48,85 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
   Future<void> _scanToAdd(List<Product> products) async {
     final code = await scanBarcode(context);
     if (code == null) return;
-    final match = products.where((p) => p.barcode == code).firstOrNull;
+
+    Product? matchedProduct;
+    ProductVariant? matchedVariant;
+    for (final p in products) {
+      if (p.hasVariants) {
+        final v = p.variants
+            .where((v) =>
+                v.barcode == code ||
+                v.sku == code ||
+                v.partNumber == code)
+            .firstOrNull;
+        if (v != null) {
+          matchedProduct = p;
+          matchedVariant = v;
+          break;
+        }
+      }
+      if (p.barcode == code || p.partNumber == code) {
+        matchedProduct = p;
+        break;
+      }
+    }
+
     if (!mounted) return;
-    if (match == null) {
+    if (matchedProduct == null) {
       _snack('No product with barcode $code');
       return;
     }
+
     final allowOversell = ref.read(businessSettingsStreamProvider).value
             ?.allowSellWhenOutOfStock ??
         false;
-    if (!match.isService && match.stockQty <= 0 && !allowOversell) {
-      _snack('${match.name} is out of stock');
+
+    if (matchedVariant != null) {
+      if (!matchedProduct.isService && matchedVariant.stockQty <= 0 && !allowOversell) {
+        _snack('${matchedProduct.name} (${matchedVariant.name}) is out of stock');
+        return;
+      }
+      ref.read(cartControllerProvider.notifier).add(matchedProduct, variant: matchedVariant);
+      _snack('Added ${matchedProduct.name} (${matchedVariant.name})');
       return;
     }
-    ref.read(cartControllerProvider.notifier).add(match);
-    _snack('Added ${match.name}');
+
+    // Direct product barcode
+    if (matchedProduct.hasVariants && matchedProduct.variants.isNotEmpty) {
+      final res = await showVariantSelectorSheet(context: context, product: matchedProduct);
+      if (res != null && mounted) {
+        ref.read(cartControllerProvider.notifier).add(
+          matchedProduct,
+          variant: res.variant,
+          quantity: res.quantity,
+        );
+        _snack('Added ${matchedProduct.name} (${res.variant.name}) x${res.quantity}');
+      }
+      return;
+    }
+
+    if (!matchedProduct.isService && matchedProduct.stockQty <= 0 && !allowOversell) {
+      _snack('${matchedProduct.name} is out of stock');
+      return;
+    }
+    ref.read(cartControllerProvider.notifier).add(matchedProduct);
+    _snack('Added ${matchedProduct.name}');
+  }
+
+  Future<void> _handleProductTap(Product product) async {
+    if (product.hasVariants && product.variants.isNotEmpty) {
+      final res = await showVariantSelectorSheet(context: context, product: product);
+      if (res != null && mounted) {
+        ref.read(cartControllerProvider.notifier).add(
+          product,
+          variant: res.variant,
+          quantity: res.quantity,
+        );
+        _snack('Added ${product.name} (${res.variant.name}) x${res.quantity}');
+      }
+      return;
+    }
+    ref.read(cartControllerProvider.notifier).add(product);
   }
 
   Future<void> _openCart() async {
@@ -216,15 +281,16 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (_, i) {
                       final product = filtered[i];
-                      final line = cart
+                      final cartLines = cart
                           .where((l) => l.productId == product.id)
-                          .firstOrNull;
-                      final cartQty = line?.quantity ?? 0;
+                          .toList();
+                      final cartQty = cartLines.fold(0, (sum, l) => sum + l.quantity);
+                      final effectiveStock = product.effectiveStockQty;
                       final maxQty = product.isService || allowOversell
                           ? 999
-                          : product.stockQty;
+                          : effectiveStock;
                       final outOfStock = !product.isService &&
-                          product.stockQty <= 0 &&
+                          effectiveStock <= 0 &&
                           !allowOversell;
                       return _ProductCard(
                         product: product,
@@ -232,15 +298,21 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                         outOfStock: outOfStock,
                         atStockLimit: !product.isService &&
                             !allowOversell &&
-                            cartQty >= product.stockQty,
+                            cartQty >= effectiveStock,
                         onAdd: outOfStock || cartQty >= maxQty
                             ? null
-                            : () => ref
+                            : () => _handleProductTap(product),
+                        onRemove: () {
+                          if (product.hasVariants && cartLines.isNotEmpty) {
+                            ref
                                 .read(cartControllerProvider.notifier)
-                                .add(product),
-                        onRemove: () => ref
-                            .read(cartControllerProvider.notifier)
-                            .decrement(product.id),
+                                .decrement(product.id, variantUid: cartLines.last.variantUid);
+                          } else {
+                            ref
+                                .read(cartControllerProvider.notifier)
+                                .decrement(product.id);
+                          }
+                        },
                       );
                     },
                   );
@@ -536,13 +608,17 @@ class _ProductCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    formatPeso(product.sellingPrice),
+                    product.hasVariants && product.variants.isNotEmpty
+                        ? ((product.minSellingPrice - product.maxSellingPrice).abs() < 0.01
+                            ? formatPeso(product.minSellingPrice)
+                            : '${formatPeso(product.minSellingPrice)} - ${formatPeso(product.maxSellingPrice)}')
+                        : formatPeso(product.sellingPrice),
                     style: AppTextStyles.body.copyWith(
                       fontWeight: FontWeight.w900,
                       color: outOfStock
                           ? theme.colorScheme.onSurfaceVariant
                           : primary,
-                      fontSize: 14,
+                      fontSize: 13,
                     ),
                   ),
                   if (!product.isService) ...[
@@ -558,16 +634,22 @@ class _ProductCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          outOfStock
-                              ? 'Out of stock'
-                              : '${product.stockQty} in stock',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: outOfStock
-                                ? theme.colorScheme.error
-                                : stockColor,
-                            fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Text(
+                            outOfStock
+                                ? 'Out of stock'
+                                : (product.hasVariants && product.variants.isNotEmpty
+                                    ? '${product.effectiveStockQty} in stock (${product.variants.length} opts)'
+                                    : '${product.stockQty} in stock'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: outOfStock
+                                  ? theme.colorScheme.error
+                                  : stockColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -591,6 +673,34 @@ class _ProductCard extends StatelessWidget {
                         ),
                         child: const Text('Out of Stock',
                             style: TextStyle(fontSize: 11)),
+                      ),
+                    )
+                  else if (product.hasVariants)
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onAdd,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(36),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.tune_rounded, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              inCart ? 'OPTIONS ($quantity)' : 'SELECT',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   else if (quantity == 0)

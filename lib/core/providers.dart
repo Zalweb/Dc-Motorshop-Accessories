@@ -5,11 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/models/business_settings.dart';
 import '../data/models/category.dart';
 import '../data/models/expense.dart';
+import '../data/models/inventory_transaction.dart';
 import '../data/models/product.dart';
 import '../data/models/sale.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/category_repository.dart';
 import '../data/repositories/expense_repository.dart';
+import '../data/repositories/inventory_repository.dart';
 import '../data/repositories/maintenance_repository.dart';
 import '../data/repositories/product_repository.dart';
 import '../data/repositories/sale_repository.dart';
@@ -81,6 +83,10 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>(
   (ref) => ExpenseRepository(ref.watch(isarProvider)),
 );
 
+final inventoryRepositoryProvider = Provider<InventoryRepository>(
+  (ref) => InventoryRepository(ref.watch(isarProvider)),
+);
+
 final maintenanceRepositoryProvider = Provider<MaintenanceRepository>(
   (ref) => MaintenanceRepository(ref.watch(isarProvider)),
 );
@@ -100,3 +106,9 @@ final saleListStreamProvider = StreamProvider<List<Sale>>(
 final expenseListStreamProvider = StreamProvider<List<Expense>>(
   (ref) => ref.watch(expenseRepositoryProvider).watchAll(),
 );
+
+final recentInventoryTransactionsStreamProvider =
+    StreamProvider<List<InventoryTransaction>>(
+  (ref) => ref.watch(inventoryRepositoryProvider).watchRecent(),
+);
+

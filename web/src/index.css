@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #0a0a0a;
+  --bg-surface: #141414;
+  --bg-surface-elevated: #1e1e1e;
+  --bg-surface-active: #282828;
+  --border-color: #2a2a2a;
+  --border-subtle: #1c1c1c;
+  
+  /* Theme Accents (Default Blue) */
+  --accent-primary: #2563eb;
+  --accent-light: #3b82f6;
+  --accent-hover: #1d4ed8;
+  --accent-glow: rgba(37, 99, 235, 0.25);
+  
+  /* Financial / Status tokens */
+  --color-profit: #3b82f6;
+  --color-cogs: #10b981;
+  --color-expense: #f59e0b;
+  --color-discount: #8b5cf6;
+  --color-margin: #3b82f6;
+  --color-active: #22c55e;
+  --color-danger: #ef4444;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Theme overrides */
+[data-theme="Green"] {
+  --accent-primary: #16a34a;
+  --accent-light: #22c55e;
+  --accent-hover: #15803d;
+  --accent-glow: rgba(34, 197, 94, 0.25);
+}
+[data-theme="Purple"] {
+  --accent-primary: #7c3aed;
+  --accent-light: #8b5cf6;
+  --accent-hover: #6d28d9;
+  --accent-glow: rgba(139, 92, 246, 0.25);
+}
+[data-theme="Orange"] {
+  --accent-primary: #ea580c;
+  --accent-light: #f97316;
+  --accent-hover: #c2410c;
+  --accent-glow: rgba(249, 115, 22, 0.25);
+}
+[data-theme="Rose"] {
+  --accent-primary: #e11d48;
+  --accent-light: #f43f5e;
+  --accent-hover: #be123c;
+  --accent-glow: rgba(244, 63, 94, 0.25);
+}
+[data-theme="Slate"] {
+  --accent-primary: #475569;
+  --accent-light: #64748b;
+  --accent-hover: #334155;
+  --accent-glow: rgba(100, 116, 139, 0.25);
+}
+[data-theme="Teal"] {
+  --accent-primary: #0d9488;
+  --accent-light: #14b8a6;
+  --accent-hover: #0f766e;
+  --accent-glow: rgba(20, 184, 166, 0.25);
+}
+[data-theme="Indigo"] {
+  --accent-primary: #4f46e5;
+  --accent-light: #6366f1;
+  --accent-hover: #4338ca;
+  --accent-glow: rgba(99, 102, 241, 0.25);
+}
+[data-theme="Amber"] {
+  --accent-primary: #d97706;
+  --accent-light: #f59e0b;
+  --accent-hover: #b45309;
+  --accent-glow: rgba(245, 158, 11, 0.25);
+}
+[data-theme="Cyan"] {
+  --accent-primary: #0891b2;
+  --accent-light: #06b6d4;
+  --accent-hover: #0e7490;
+  --accent-glow: rgba(6, 182, 212, 0.25);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+}
+
+body {
+  background-color: var(--bg-base);
+  color: #ffffff;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Utilities */
+.bg-base { background-color: var(--bg-base); }
+.bg-surface { background-color: var(--bg-surface); }
+.bg-surface-elevated { background-color: var(--bg-surface-elevated); }
+.bg-surface-active { background-color: var(--bg-surface-active); }
+.border-subtle { border-color: var(--border-subtle); }
+.border-default { border-color: var(--border-color); }
+
+.bg-accent { background-color: var(--accent-primary); }
+.bg-accent-light { background-color: var(--accent-light); }
+.text-accent { color: var(--accent-light); }
+.border-accent { border-color: var(--accent-primary); }
+.glow-accent { box-shadow: 0 0 20px var(--accent-glow); }
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

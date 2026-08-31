@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/models/business_settings.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
+import '../../data/models/inventory_transaction.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sale.dart';
 import '../../data/models/user.dart';
@@ -25,6 +26,7 @@ class IsarService {
         ProductSchema,
         SaleSchema,
         ExpenseSchema,
+        InventoryTransactionSchema,
       ],
       directory: dir.path,
       name: 'dc_motorcycle_inventory',

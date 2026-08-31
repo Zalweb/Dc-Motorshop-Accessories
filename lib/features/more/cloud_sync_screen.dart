@@ -27,6 +27,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   
   bool _isSyncing = false;
   bool _isRestoring = false;
+  bool _isCleaning = false;
   String? _lastMessage;
   bool _lastSuccess = true;
 
@@ -167,6 +168,68 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
       });
     } finally {
       setState(() => _isRestoring = false);
+    }
+  }
+
+  Future<void> _cleanupSalesAndDuplicates() async {
+    final theme = Theme.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Wipe Sales & Remove Duplicates?'),
+          content: const Text(
+            'This will:\n'
+            '• Delete all sales history in Supabase & this device\n'
+            '• Merge and remove duplicate business profiles\n'
+            '• Deduplicate categories & keep only connected products\n\n'
+            'Your products and catalog will NOT be deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Cancel',
+                  style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Wipe & Clean'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isCleaning = true;
+      _lastMessage = null;
+    });
+    try {
+      final ok = await ref
+          .read(supabaseSyncServiceProvider)
+          .cleanupSalesAndDuplicates();
+      setState(() {
+        _lastSuccess = ok;
+        _lastMessage = ok
+            ? 'Sales removed and duplicates cleaned in Supabase & locally!'
+            : 'Not signed in — please log in to clean.';
+      });
+    } catch (e) {
+      setState(() {
+        _lastSuccess = false;
+        _lastMessage = 'Cleanup failed: ${e.toString()}';
+      });
+    } finally {
+      setState(() => _isCleaning = false);
     }
   }
 
@@ -425,6 +488,63 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                         _isRestoring ? 'Restoring…' : 'Restore from Cloud'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      textStyle:
+                          const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // ── Clean Sales & Remove Duplicates ───────────────────────────
+            Text(
+              'DATABASE CLEANUP',
+              style: AppTextStyles.labelCaps
+                  .copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            GlassContainer(
+              borderRadius: BorderRadius.circular(16),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Wipe Sales & Remove Duplicates',
+                    style: AppTextStyles.body
+                        .copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Removes all test sales in Supabase and locally, '
+                    'merges duplicate business profiles and categories, '
+                    'and retains only connected products.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed:
+                        (_isCleaning || !_isSignedIn) ? null : _cleanupSalesAndDuplicates,
+                    icon: _isCleaning
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.cleaning_services_rounded),
+                    label: Text(
+                        _isCleaning ? 'Cleaning…' : 'Clean Sales & Deduplicate'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.expense,
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(52),
                       shape: RoundedRectangleBorder(

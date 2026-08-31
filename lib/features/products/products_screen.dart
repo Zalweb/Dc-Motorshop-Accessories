@@ -32,9 +32,16 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
       if (category != null && p.category != category) return false;
       if (_query.isNotEmpty) {
         final q = _query.toLowerCase();
-        return p.name.toLowerCase().contains(q) ||
+        final matchMain = p.name.toLowerCase().contains(q) ||
             (p.barcode?.contains(q) ?? false) ||
             (p.category?.toLowerCase().contains(q) ?? false);
+        if (matchMain) return true;
+        if (p.hasVariants) {
+          return p.variants.any((v) =>
+              v.name.toLowerCase().contains(q) ||
+              (v.barcode?.toLowerCase().contains(q) ?? false));
+        }
+        return false;
       }
       return true;
     }).toList();
@@ -163,7 +170,7 @@ class _ProductTile extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.onSurface.withOpacity(0.06),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -185,7 +192,9 @@ class _ProductTile extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '${product.stockQty} in stock',
+                            product.hasVariants && product.variants.isNotEmpty
+                                ? '${product.effectiveStockQty} in stock (${product.variants.length} vars)'
+                                : '${product.stockQty} in stock',
                             style: TextStyle(
                               fontSize: 11,
                               color: stockColor,
@@ -204,16 +213,20 @@ class _ProductTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: primary.withOpacity(0.08),
+                color: primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primary.withOpacity(0.25)),
+                border: Border.all(color: primary.withValues(alpha: 0.25)),
               ),
               child: Text(
-                formatPeso(product.sellingPrice),
+                product.hasVariants && product.variants.isNotEmpty
+                    ? ((product.minSellingPrice - product.maxSellingPrice).abs() < 0.01
+                        ? formatPeso(product.minSellingPrice)
+                        : '${formatPeso(product.minSellingPrice)} - ${formatPeso(product.maxSellingPrice)}')
+                    : formatPeso(product.sellingPrice),
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   color: theme.colorScheme.onSurface,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
               ),
             ),

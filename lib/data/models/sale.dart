@@ -57,4 +57,13 @@ class SaleItem {
 
   /// Server-aligned product UUID (for checkout push).
   String? productUid;
+
+  /// Server-aligned variant UUID if this line item is a variant.
+  String? variantUid;
+
+  /// Variant combination name (e.g. "Matte Black / 28mm")
+  String? variantName;
+
+  /// Stock Keeping Unit snapshot at the time of sale.
+  String? sku;
 }

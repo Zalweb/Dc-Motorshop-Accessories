@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/business_settings.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
+import '../../data/models/inventory_transaction.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sale.dart';
 import '../../data/models/user.dart';
@@ -116,7 +117,7 @@ class SupabaseSyncService {
       bizId: bizId,
       since: null,
       apply: _applyProduct,
-      columns: 'id,business_id,name,barcode,part_number,description,category_id,brand,unit,is_service,cost_price,selling_price,stock_on_hand,image_url,created_at,updated_at,deleted_at',
+      columns: 'id,business_id,name,barcode,part_number,description,category_id,brand,unit,is_service,has_variants,variation1_name,variation2_name,variants,cost_price,selling_price,stock_on_hand,image_url,created_at,updated_at,deleted_at',
     );
     await _pullTable(
       table: 'expenses',
@@ -129,6 +130,120 @@ class SupabaseSyncService {
     // Pull business profile last (calendar days, checklist, logo)
     await _pullBusinessProfile(bizId);
     return true;
+  }
+
+  /// Deletes all sales from Supabase & local Isar, deduplicates business profiles & categories.
+  Future<bool> cleanupSalesAndDuplicates() async {
+    if (!SupabaseService.hasSession) return false;
+    final uid = SupabaseService.currentUserId;
+    if (uid == null) return false;
+
+    _syncState.setSyncing();
+
+    try {
+      // 1. Deduplicate business_profiles for this owner
+      final dynamic profilesRes = await _db
+          .from('business_profiles')
+          .select('id, updated_at')
+          .eq('owner_id', uid);
+      final profiles = List<Map<String, dynamic>>.from(profilesRes as List);
+
+      String? primaryBizId;
+      if (profiles.isNotEmpty) {
+        // Pick primary profile (most recently updated)
+        profiles.sort((a, b) {
+          final at = DateTime.tryParse(a['updated_at']?.toString() ?? '') ?? DateTime(2000);
+          final bt = DateTime.tryParse(b['updated_at']?.toString() ?? '') ?? DateTime(2000);
+          return bt.compareTo(at);
+        });
+        primaryBizId = profiles.first['id']?.toString();
+
+        // Reassign and delete extra profiles
+        if (profiles.length > 1 && primaryBizId != null) {
+          for (int i = 1; i < profiles.length; i++) {
+            final dupId = profiles[i]['id']?.toString();
+            if (dupId != null && dupId != primaryBizId) {
+              await _db.from('products').update({'business_id': primaryBizId}).eq('business_id', dupId);
+              await _db.from('categories').update({'business_id': primaryBizId}).eq('business_id', dupId);
+              await _db.from('expenses').update({'business_id': primaryBizId}).eq('business_id', dupId);
+              await _db.from('business_profiles').delete().eq('id', dupId);
+            }
+          }
+        }
+      }
+
+      final bizId = primaryBizId ?? await _businessId();
+
+      // 2. Delete all sales & sale items in Supabase
+      if (bizId != null) {
+        await _db.from('sale_items').delete().eq('business_id', bizId);
+        await _db.from('sales').delete().eq('business_id', bizId);
+      }
+
+      // 3. Clear local sales in Isar
+      await _isar.writeTxn(() async {
+        await _isar.sales.clear();
+      });
+
+      // 4. Deduplicate categories in Supabase for this business
+      if (bizId != null) {
+        final dynamic catsRes = await _db
+            .from('categories')
+            .select('id, name, created_at')
+            .eq('business_id', bizId)
+            .isFilter('deleted_at', null);
+        final cats = List<Map<String, dynamic>>.from(catsRes as List);
+
+        final Map<String, List<Map<String, dynamic>>> groupedCats = {};
+        for (final c in cats) {
+          final name = (c['name']?.toString() ?? '').trim().toLowerCase();
+          groupedCats.putIfAbsent(name, () => []).add(c);
+        }
+
+        for (final entry in groupedCats.entries) {
+          if (entry.value.length > 1) {
+            final primaryCat = entry.value.first;
+            final primaryCatId = primaryCat['id']?.toString();
+            for (int j = 1; j < entry.value.length; j++) {
+              final dupCatId = entry.value[j]['id']?.toString();
+              if (dupCatId != null && primaryCatId != null) {
+                await _db.from('products').update({'category_id': primaryCatId}).eq('category_id', dupCatId);
+                await _db.from('categories').delete().eq('id', dupCatId);
+              }
+            }
+          }
+        }
+
+        // 5. Clean up soft-deleted records in Supabase
+        await _db.from('categories').delete().not('deleted_at', 'is', null).eq('business_id', bizId);
+        await _db.from('products').delete().not('deleted_at', 'is', null).eq('business_id', bizId);
+        await _db.from('expenses').delete().not('deleted_at', 'is', null).eq('business_id', bizId);
+      }
+
+      // 6. Reset sync timestamps and refresh products & categories into local Isar
+      await clearCache();
+      if (bizId != null) {
+        await _pullTable(
+          table: 'categories',
+          bizId: bizId,
+          since: null,
+          apply: _applyCategory,
+        );
+        await _pullTable(
+          table: 'products',
+          bizId: bizId,
+          since: null,
+          apply: _applyProduct,
+          columns: 'id,business_id,name,barcode,part_number,description,category_id,brand,unit,is_service,has_variants,variation1_name,variation2_name,variants,cost_price,selling_price,stock_on_hand,image_url,created_at,updated_at,deleted_at',
+        );
+      }
+
+      _syncState.setSuccess();
+      return true;
+    } catch (e) {
+      _syncState.setError();
+      rethrow;
+    }
   }
 
   /// Pushes business settings (onboarding data, theme, etc.) to Supabase.
@@ -219,6 +334,7 @@ class SupabaseSyncService {
     await _pushExpenses(bizId);
     await _pushProducts(bizId);
     await _pushSales(bizId);
+    await _pushInventoryTransactions(bizId);
   }
 
   Future<void> _pushCategories(String bizId) async {
@@ -270,6 +386,59 @@ class SupabaseSyncService {
 
     await _db.from('products').upsert(rows);
 
+    // Upsert relational product_variants
+    final variantRows = <Map<String, dynamic>>[];
+    for (final p in dirty) {
+      if (p.hasVariants && p.variants.isNotEmpty) {
+        for (final v in p.variants) {
+          variantRows.add({
+            'id': v.uid,
+            'product_id': p.uid,
+            'business_id': bizId,
+            'sku': v.sku,
+            'barcode': v.barcode,
+            'part_number': v.partNumber ?? p.partNumber,
+            'variant_name': v.name,
+            'option1_name': p.variation1Name,
+            'option1_value': v.option1,
+            'option2_name': p.variation2Name,
+            'option2_value': v.option2,
+            'unit': p.unit,
+            'cost_price': v.costPrice.toStringAsFixed(2),
+            'selling_price': v.sellingPrice.toStringAsFixed(2),
+            'stock_on_hand': v.stockQty,
+            'reorder_level': v.reorderLevel,
+            'is_active': v.isActive,
+            'created_at': p.createdAt.toUtc().toIso8601String(),
+            'updated_at': p.updatedAt.toUtc().toIso8601String(),
+          });
+        }
+      } else {
+        // Standard single variant
+        variantRows.add({
+          'id': p.uid,
+          'product_id': p.uid,
+          'business_id': bizId,
+          'sku': p.barcode,
+          'barcode': p.barcode,
+          'part_number': p.partNumber,
+          'variant_name': 'Standard',
+          'unit': p.unit,
+          'cost_price': p.costPrice.toStringAsFixed(2),
+          'selling_price': p.sellingPrice.toStringAsFixed(2),
+          'stock_on_hand': p.stockQty,
+          'reorder_level': 5,
+          'is_active': true,
+          'created_at': p.createdAt.toUtc().toIso8601String(),
+          'updated_at': p.updatedAt.toUtc().toIso8601String(),
+        });
+      }
+    }
+
+    if (variantRows.isNotEmpty) {
+      await _db.from('product_variants').upsert(variantRows);
+    }
+
     await _isar.writeTxn(() async {
       for (final p in dirty) {
         p.isDirty = false;
@@ -292,6 +461,9 @@ class SupabaseSyncService {
           'sale_id': sale.uid,
           'business_id': bizId,
           'product_id': item.productUid,
+          'product_variant_id': item.variantUid ?? item.productUid,
+          'sku': item.sku,
+          'variant_name': item.variantName,
           'name': item.name,
           'quantity': item.quantity,
           'unit_price': item.unitPrice.toStringAsFixed(2),
@@ -307,6 +479,33 @@ class SupabaseSyncService {
       sale.isDirty = false;
       await _isar.writeTxn(() => _isar.sales.put(sale));
     }
+  }
+
+  Future<void> _pushInventoryTransactions(String bizId) async {
+    final dirty = await _isar.inventoryTransactions.filter().isDirtyEqualTo(true).findAll();
+    if (dirty.isEmpty) return;
+
+    final rows = dirty.map((t) => {
+      'id': t.uid,
+      'business_id': bizId,
+      'product_variant_id': t.productVariantUid,
+      'transaction_type': t.transactionType,
+      'quantity': t.quantity,
+      'unit_cost': t.unitCost?.toStringAsFixed(2),
+      'reference_type': t.referenceType,
+      'reference_id': t.referenceId,
+      'notes': t.notes,
+      'created_at': t.createdAt.toUtc().toIso8601String(),
+    }).toList();
+
+    await _db.from('inventory_transactions').upsert(rows);
+
+    await _isar.writeTxn(() async {
+      for (final t in dirty) {
+        t.isDirty = false;
+      }
+      await _isar.inventoryTransactions.putAll(dirty);
+    });
   }
 
   // ── Pull ───────────────────────────────────────────────────────────────────
@@ -326,7 +525,7 @@ class SupabaseSyncService {
       bizId: bizId,
       since: _lastSync('products'),
       apply: _applyProduct,
-      columns: 'id,business_id,name,barcode,part_number,description,category_id,brand,unit,is_service,cost_price,selling_price,stock_on_hand,image_url,created_at,updated_at,deleted_at',
+      columns: 'id,business_id,name,barcode,part_number,description,category_id,brand,unit,is_service,has_variants,variation1_name,variation2_name,variants,cost_price,selling_price,stock_on_hand,image_url,created_at,updated_at,deleted_at',
     );
     await _pullTable(
       table: 'expenses',
@@ -504,6 +703,28 @@ class SupabaseSyncService {
       if (cat != null) categoryName = cat.name;
     }
 
+    final rawVariants = row['variants'];
+    final List<ProductVariant> parsedVariants = [];
+    if (rawVariants is List) {
+      for (final item in rawVariants) {
+        if (item is Map) {
+          parsedVariants.add(
+            ProductVariant()
+              ..uid = item['uid']?.toString() ?? ProductVariant().uid
+              ..name = item['name']?.toString() ?? ''
+              ..option1 = item['option1']?.toString()
+              ..option2 = item['option2']?.toString()
+              ..barcode = item['barcode']?.toString()
+              ..costPrice = double.tryParse(item['cost_price']?.toString() ?? '0') ?? 0
+              ..sellingPrice = double.tryParse(item['selling_price']?.toString() ?? '0') ?? 0
+              ..stockQty = int.tryParse(item['stock_qty']?.toString() ?? '0') ?? 0
+              ..imagePath = item['image_path']?.toString()
+              ..imageUrl = item['image_url']?.toString(),
+          );
+        }
+      }
+    }
+
     final product = existing ?? Product();
     product
       ..uid = rowId
@@ -515,6 +736,10 @@ class SupabaseSyncService {
       ..brand = row['brand']?.toString()
       ..unit = row['unit']?.toString() ?? 'piece'
       ..isService = (row['is_service'] ?? false) as bool
+      ..hasVariants = (row['has_variants'] ?? false) as bool
+      ..variation1Name = row['variation1_name']?.toString()
+      ..variation2Name = row['variation2_name']?.toString()
+      ..variants = parsedVariants
       ..costPrice = double.tryParse(row['cost_price'].toString()) ?? 0
       ..sellingPrice = double.tryParse(row['selling_price'].toString()) ?? 0
       ..stockQty = (row['stock_on_hand'] as num?)?.toInt() ?? 0
@@ -666,6 +891,19 @@ class SupabaseSyncService {
           .findFirst();
       catId = cat?.uid;
     }
+    final variantList = p.variants.map((v) => {
+      'uid': v.uid,
+      'name': v.name,
+      'option1': v.option1,
+      'option2': v.option2,
+      'barcode': v.barcode,
+      'cost_price': v.costPrice,
+      'selling_price': v.sellingPrice,
+      'stock_qty': v.stockQty,
+      'image_path': v.imagePath,
+      'image_url': v.imageUrl,
+    }).toList();
+
     return {
       'id': p.uid,
       'business_id': bizId,
@@ -677,6 +915,10 @@ class SupabaseSyncService {
       'brand': p.brand,
       'unit': p.unit,
       'is_service': p.isService,
+      'has_variants': p.hasVariants,
+      'variation1_name': p.variation1Name,
+      'variation2_name': p.variation2Name,
+      'variants': variantList,
       'cost_price': p.costPrice.toStringAsFixed(2),
       'selling_price': p.sellingPrice.toStringAsFixed(2),
       'stock_on_hand': p.stockQty,
@@ -724,22 +966,28 @@ class SupabaseSyncService {
     final cached = _prefs.getString('supabase_business_id');
     if (cached != null) return cached;
 
-    // Fetch from Supabase.
-    final row = await _db
+    // Fetch from Supabase safely even if duplicates exist
+    final dynamic rows = await _db
         .from('business_profiles')
-        .select('id')
-        .eq('owner_id', uid)
-        .maybeSingle();
+        .select('id, updated_at')
+        .eq('owner_id', uid);
+    final list = List<Map<String, dynamic>>.from(rows as List);
 
-    if (row == null) {
+    if (list.isEmpty) {
       final settings = await _isar.businessSettings.get(BusinessSettings.singletonId);
       if (settings != null && settings.uid.isNotEmpty) {
         return settings.uid;
       }
       return null;
     }
+
+    list.sort((a, b) {
+      final at = DateTime.tryParse(a['updated_at']?.toString() ?? '') ?? DateTime(2000);
+      final bt = DateTime.tryParse(b['updated_at']?.toString() ?? '') ?? DateTime(2000);
+      return bt.compareTo(at);
+    });
     
-    final bizId = row['id']?.toString();
+    final bizId = list.first['id']?.toString();
     if (bizId == null) return null;
     await _prefs.setString('supabase_business_id', bizId);
     return bizId;

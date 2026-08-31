@@ -19,6 +19,7 @@ import '../expenses/expenses_screen.dart';
 import '../dashboard/business_calendar_screen.dart';
 import '../dashboard/financial_calendar_screen.dart';
 import '../dashboard/reports_screen.dart';
+import 'cloud_sync_screen.dart';
 import 'general_settings_screen.dart';
 import 'import_export_screen.dart';
 import 'inventory_settings_screen.dart';
@@ -349,6 +350,21 @@ class MoreScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(16),
             child: Column(
               children: [
+                ListTile(
+                  leading: Icon(Icons.cloud_sync_outlined, color: primary),
+                  title: Text('Cloud Backup & Sync', style: AppTextStyles.body),
+                  subtitle: Text(
+                    'Sync status, cloud management & diagnostic tools',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  trailing: Icon(Icons.chevron_right_rounded,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  onTap: () => Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(builder: (_) => const CloudSyncScreen()),
+                  ),
+                ),
+                Divider(color: theme.colorScheme.outlineVariant, height: 1),
                 ListTile(
                   leading: Icon(Icons.cloud_upload_rounded, color: primary),
                   title: Text('Sync now', style: AppTextStyles.body),

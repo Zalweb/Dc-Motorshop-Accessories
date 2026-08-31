@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../data/models/inventory_transaction.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sale.dart';
 
@@ -18,6 +19,9 @@ class CartLine {
     required this.productId,
     required this.productUid,
     required this.name,
+    this.variantUid,
+    this.variantName,
+    this.sku,
     required this.unitPrice,
     required this.unitCost,
     required this.quantity,
@@ -27,10 +31,20 @@ class CartLine {
   final int productId;
   final String productUid;
   final String name;
+  final String? variantUid;
+  final String? variantName;
+  final String? sku;
   final double unitPrice;
   final double unitCost;
   final int quantity;
   final bool isService;
+
+  String get cartKey =>
+      variantUid != null ? '$productId:$variantUid' : '$productId';
+
+  String get displayName => variantName != null && variantName!.isNotEmpty
+      ? '$name ($variantName)'
+      : name;
 
   double get lineTotal => unitPrice * quantity;
 
@@ -38,6 +52,9 @@ class CartLine {
         productId: productId,
         productUid: productUid,
         name: name,
+        variantUid: variantUid,
+        variantName: variantName,
+        sku: sku,
         unitPrice: unitPrice,
         unitCost: unitCost,
         quantity: quantity ?? this.quantity,
@@ -49,10 +66,11 @@ class CartController extends Notifier<List<CartLine>> {
   @override
   List<CartLine> build() => [];
 
-  void add(Product product) {
-    final index = state.indexWhere((l) => l.productId == product.id);
+  void add(Product product, {ProductVariant? variant, int quantity = 1}) {
+    final key = variant != null ? '${product.id}:${variant.uid}' : '${product.id}';
+    final index = state.indexWhere((l) => l.cartKey == key);
     if (index >= 0) {
-      _setQuantity(index, state[index].quantity + 1);
+      _setQuantity(index, state[index].quantity + quantity);
       return;
     }
     state = [
@@ -61,21 +79,26 @@ class CartController extends Notifier<List<CartLine>> {
         productId: product.id,
         productUid: product.uid,
         name: product.name,
-        unitPrice: product.sellingPrice,
-        unitCost: product.costPrice,
-        quantity: 1,
+        variantUid: variant?.uid,
+        variantName: variant?.name,
+        sku: variant?.sku ?? product.barcode,
+        unitPrice: variant?.sellingPrice ?? product.sellingPrice,
+        unitCost: variant?.costPrice ?? product.costPrice,
+        quantity: quantity,
         isService: product.isService,
       ),
     ];
   }
 
-  void increment(int productId) {
-    final index = state.indexWhere((l) => l.productId == productId);
+  void increment(int productId, {String? variantUid}) {
+    final key = variantUid != null ? '$productId:$variantUid' : '$productId';
+    final index = state.indexWhere((l) => l.cartKey == key);
     if (index >= 0) _setQuantity(index, state[index].quantity + 1);
   }
 
-  void decrement(int productId) {
-    final index = state.indexWhere((l) => l.productId == productId);
+  void decrement(int productId, {String? variantUid}) {
+    final key = variantUid != null ? '$productId:$variantUid' : '$productId';
+    final index = state.indexWhere((l) => l.cartKey == key);
     if (index < 0) return;
     final next = state[index].quantity - 1;
     if (next <= 0) {
@@ -85,8 +108,9 @@ class CartController extends Notifier<List<CartLine>> {
     }
   }
 
-  void removeLine(int productId) {
-    state = [...state]..removeWhere((l) => l.productId == productId);
+  void removeLine(int productId, {String? variantUid}) {
+    final key = variantUid != null ? '$productId:$variantUid' : '$productId';
+    state = [...state]..removeWhere((l) => l.cartKey == key);
   }
 
   void clear() => state = [];
@@ -99,7 +123,7 @@ class CartController extends Notifier<List<CartLine>> {
 
   double get total => state.fold(0, (sum, l) => sum + l.lineTotal);
 
-  /// Persists the cart as a Sale, decrements stock, and clears the cart.
+  /// Persists the cart as a Sale, decrements stock, logs inventory transactions, and clears cart.
   Future<Sale> checkout({
     String? customerName,
     String status = 'paid',
@@ -110,6 +134,7 @@ class CartController extends Notifier<List<CartLine>> {
   }) async {
     final saleRepo = ref.read(saleRepositoryProvider);
     final productRepo = ref.read(productRepositoryProvider);
+    final inventoryRepo = ref.read(inventoryRepositoryProvider);
     final settings = await ref.read(settingsRepositoryProvider).getOrCreate();
 
     // Guard: block overselling unless the shop opted into it.
@@ -118,8 +143,17 @@ class CartController extends Notifier<List<CartLine>> {
       for (final line in state) {
         if (line.isService) continue;
         final product = await productRepo.byId(line.productId);
-        if (product != null && product.stockQty < line.quantity) {
-          shortItems.add(line.name);
+        if (product != null) {
+          if (product.hasVariants && line.variantUid != null) {
+            final variant = product.variants
+                .where((v) => v.uid == line.variantUid)
+                .firstOrNull;
+            if (variant != null && variant.stockQty < line.quantity) {
+              shortItems.add(line.displayName);
+            }
+          } else if (product.stockQty < line.quantity) {
+            shortItems.add(line.displayName);
+          }
         }
       }
       if (shortItems.isNotEmpty) throw OutOfStockException(shortItems);
@@ -130,13 +164,16 @@ class CartController extends Notifier<List<CartLine>> {
       ..customerName = customerName
       ..items = state
           .map((l) => SaleItem()
-            ..name = l.name
+            ..name = l.displayName
             ..quantity = l.quantity
             ..unitPrice = l.unitPrice
             ..unitCost = l.unitCost
             ..lineTotal = l.lineTotal
             ..productId = l.productId
-            ..productUid = l.productUid)
+            ..productUid = l.productUid
+            ..variantUid = l.variantUid
+            ..variantName = l.variantName
+            ..sku = l.sku)
           .toList()
       ..subtotal = total
       ..discount = 0
@@ -148,9 +185,37 @@ class CartController extends Notifier<List<CartLine>> {
       ..createdAt = date ?? DateTime.now();
 
     await saleRepo.save(sale);
+
+    // Decrement stock and create inventory audit records
+    final inventoryTxList = <InventoryTransaction>[];
     for (final line in state) {
-      await productRepo.decrementStock(line.productId, line.quantity);
+      if (line.isService) continue;
+
+      await productRepo.decrementStock(
+        line.productId,
+        line.quantity,
+        variantUid: line.variantUid,
+      );
+
+      final targetVariantUid = line.variantUid ?? line.productUid;
+      inventoryTxList.add(
+        InventoryTransaction()
+          ..productVariantUid = targetVariantUid
+          ..productName = line.displayName
+          ..transactionType = 'SALE'
+          ..quantity = -line.quantity
+          ..unitCost = line.unitCost
+          ..referenceType = 'sale'
+          ..referenceId = sale.uid
+          ..notes = 'Sale ${sale.saleNumber}'
+          ..createdAt = sale.createdAt,
+      );
     }
+
+    if (inventoryTxList.isNotEmpty) {
+      await inventoryRepo.recordBatch(inventoryTxList);
+    }
+
     clear();
     return sale;
   }
@@ -158,3 +223,4 @@ class CartController extends Notifier<List<CartLine>> {
 
 final cartControllerProvider =
     NotifierProvider<CartController, List<CartLine>>(CartController.new);
+

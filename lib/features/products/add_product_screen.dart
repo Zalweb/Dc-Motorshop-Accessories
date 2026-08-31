@@ -12,6 +12,8 @@ import '../../core/theme/app_text_styles.dart';
 import '../../data/models/product.dart';
 import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/glass_container.dart';
+import 'manage_variants_screen.dart';
+import 'widgets/variant_builder_widget.dart';
 
 /// Navigation payload for the Add Product route.
 class AddProductArgs {
@@ -52,6 +54,19 @@ class AddProductScreen extends ConsumerStatefulWidget {
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _barcode = TextEditingController();
+  final _name = TextEditingController();
+  final _description = TextEditingController();
+  final _partNumber = TextEditingController();
+  final _brand = TextEditingController();
+  final _cost = TextEditingController(text: '0');
+  final _selling = TextEditingController(text: '0');
+  final _stock = TextEditingController(text: '0');
+
+  late VariantBuilderData _variantData;
+  String? _category;
+  bool _isService = false;
+  String? _imagePath;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -69,22 +84,41 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       _category = edit.category;
       _isService = edit.isService;
       _imagePath = edit.imagePath;
-    } else if (widget.initialBarcode != null) {
-      _barcode.text = widget.initialBarcode!;
+
+      final v1List = <String>[];
+      final v2List = <String>[];
+      for (final v in edit.variants) {
+        if (v.option1 != null && !v1List.contains(v.option1)) v1List.add(v.option1!);
+        if (v.option2 != null && !v2List.contains(v.option2)) v2List.add(v.option2!);
+      }
+
+      _variantData = VariantBuilderData(
+        hasVariants: edit.hasVariants,
+        variation1Name: edit.variation1Name ?? 'Color',
+        variation1Options: v1List,
+        variation2Name: edit.variation2Name ?? 'Size',
+        variation2Options: v2List,
+        variants: edit.variants
+            .map((v) => ProductVariant()
+              ..uid = v.uid
+              ..name = v.name
+              ..option1 = v.option1
+              ..option2 = v.option2
+              ..sellingPrice = v.sellingPrice
+              ..costPrice = v.costPrice
+              ..stockQty = v.stockQty
+              ..barcode = v.barcode
+              ..imagePath = v.imagePath
+              ..imageUrl = v.imageUrl)
+            .toList(),
+      );
+    } else {
+      _variantData = VariantBuilderData();
+      if (widget.initialBarcode != null) {
+        _barcode.text = widget.initialBarcode!;
+      }
     }
   }
-  final _name = TextEditingController();
-  final _description = TextEditingController();
-  final _partNumber = TextEditingController();
-  final _brand = TextEditingController();
-  final _cost = TextEditingController(text: '0');
-  final _selling = TextEditingController(text: '0');
-  final _stock = TextEditingController(text: '0');
-
-  String? _category;
-  bool _isService = false;
-  String? _imagePath;
-  bool _saving = false;
 
   @override
   void dispose() {
@@ -108,6 +142,26 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _stock.text = (current + delta).clamp(0, 1 << 31).toString();
   }
 
+  void _toggleVariants(bool val) {
+    setState(() {
+      _variantData.hasVariants = val;
+      if (val) {
+        if (_variantData.variation1Name.trim().isEmpty) {
+          _variantData.variation1Name = 'Color';
+        }
+        _variantData.rebuildMatrix(
+          defaultPrice: double.tryParse(_selling.text) ?? 0,
+          defaultCost: double.tryParse(_cost.text) ?? 0,
+          defaultStock: int.tryParse(_stock.text) ?? 0,
+        );
+      } else {
+        _variantData.variants.clear();
+        _variantData.variation1Options.clear();
+        _variantData.variation2Options.clear();
+      }
+    });
+  }
+
   Future<void> _scan() async {
     final code = await scanBarcode(context);
     if (code != null) _barcode.text = code;
@@ -122,6 +176,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
+    final isNew = widget.editProduct == null;
+    final hasVariants = !_isService && _variantData.hasVariants && _variantData.variants.isNotEmpty;
+
     final product = (widget.editProduct ?? Product())
       ..name = _name.text.trim()
       ..barcode = _barcode.text.trim().isEmpty ? null : _barcode.text.trim()
@@ -132,9 +189,23 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           _partNumber.text.trim().isEmpty ? null : _partNumber.text.trim()
       ..brand = _brand.text.trim().isEmpty ? null : _brand.text.trim()
       ..isService = _isService
-      ..costPrice = double.tryParse(_cost.text) ?? 0
-      ..sellingPrice = double.tryParse(_selling.text) ?? 0
-      ..stockQty = _isService ? 0 : (int.tryParse(_stock.text) ?? 0)
+      ..hasVariants = hasVariants
+      ..variation1Name = hasVariants ? _variantData.variation1Name : null
+      ..variation2Name = (hasVariants && _variantData.variation2Options.isNotEmpty)
+          ? _variantData.variation2Name
+          : null
+      ..variants = hasVariants ? _variantData.variants : []
+      ..costPrice = hasVariants
+          ? (_variantData.variants.firstOrNull?.costPrice ?? 0)
+          : (double.tryParse(_cost.text) ?? 0)
+      ..sellingPrice = hasVariants
+          ? (_variantData.variants.firstOrNull?.sellingPrice ?? 0)
+          : (double.tryParse(_selling.text) ?? 0)
+      ..stockQty = _isService
+          ? 0
+          : (hasVariants
+              ? _variantData.variants.fold(0, (sum, v) => sum + v.stockQty)
+              : (int.tryParse(_stock.text) ?? 0))
       ..imagePath = _imagePath;
 
     if (widget.stage) {
@@ -144,6 +215,64 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
 
     await ref.read(productRepositoryProvider).save(product);
+    if (!mounted) return;
+
+    // Next suggestion prompt when adding a new physical product without variants
+    if (isNew && !hasVariants && !_isService) {
+      setState(() => _saving = false);
+      final addNow = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: AppColors.active, size: 24),
+              SizedBox(width: 10),
+              Text('Product Added!'),
+            ],
+          ),
+          content: Text(
+            'Would you like to add Shopee-style variations (colors, sizes, or models) for "${product.name}"?',
+            style: AppTextStyles.body,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No, Finish'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              icon: const Icon(Icons.style_outlined, size: 18),
+              label: const Text('+ Add Variations'),
+            ),
+          ],
+        ),
+      );
+
+      if (addNow == true && mounted) {
+        final result = await Navigator.of(context).push<VariantBuilderData>(
+          MaterialPageRoute(
+            builder: (_) => ManageVariantsScreen(
+              initialData: VariantBuilderData(),
+              productName: product.name,
+              defaultCostPrice: product.costPrice,
+              defaultSellingPrice: product.sellingPrice,
+              defaultStock: product.stockQty,
+            ),
+          ),
+        );
+        if (result != null && result.hasVariants && result.variants.isNotEmpty) {
+          product
+            ..hasVariants = true
+            ..variation1Name = result.variation1Name
+            ..variation2Name = result.variation2Options.isNotEmpty ? result.variation2Name : null
+            ..variants = result.variants
+            ..stockQty = result.variants.fold(0, (sum, v) => sum + v.stockQty);
+          await ref.read(productRepositoryProvider).save(product);
+        }
+      }
+    }
+
     if (!mounted) return;
     context.pop();
   }
@@ -286,58 +415,129 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             ),
             const SizedBox(height: 16),
 
-            _FormCard(
-              title: 'Pricing',
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _LabeledField(
-                      label: 'Cost price (₱)',
-                      controller: _cost,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _LabeledField(
-                      label: 'Selling price (₱)',
-                      required: true,
-                      controller: _selling,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                      ],
-                      validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0
-                          ? 'Enter a price'
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+            // Shopee-style Variations Card
             if (!_isService) ...[
-              const SizedBox(height: 16),
               _FormCard(
-                title: 'Inventory',
+                title: 'Product Variations',
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _LabeledField(
-                      label: 'Stock quantity',
-                      controller: _stock,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    InkWell(
+                      onTap: () => _toggleVariants(!_variantData.hasVariants),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.style_outlined, color: primary, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Enable Variations (Shopee-Style)',
+                                      style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text(
+                                    _variantData.hasVariants
+                                        ? 'Color, Model, Size matrix with individual stock.'
+                                        : 'Sell as a single item with 1 price & stock.',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _variantData.hasVariants,
+                              activeThumbColor: primary,
+                              onChanged: _toggleVariants,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _QuickQtyChips(onBump: _bumpStock),
+                    if (_variantData.hasVariants) ...[
+                      const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+                      VariantBuilderWidget(
+                        data: _variantData,
+                        initialCostPrice: double.tryParse(_cost.text) ?? 0,
+                        initialSellingPrice: double.tryParse(_selling.text) ?? 0,
+                        initialStock: int.tryParse(_stock.text) ?? 0,
+                        onChanged: () => setState(() {}),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+            ],
+
+            // Pricing & Stock (shown when no variants are active)
+            if (!_variantData.hasVariants) ...[
+              _FormCard(
+                title: 'Pricing',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Cost price (₱)',
+                        controller: _cost,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Selling price (₱)',
+                        required: true,
+                        controller: _selling,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                        validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0
+                            ? 'Enter a price'
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (!_isService) ...[
+                const SizedBox(height: 16),
+                _FormCard(
+                  title: 'Inventory',
+                  child: Column(
+                    children: [
+                      _LabeledField(
+                        label: 'Stock quantity',
+                        controller: _stock,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      ),
+                      const SizedBox(height: 14),
+                      _QuickQtyChips(onBump: _bumpStock),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ],
         ),

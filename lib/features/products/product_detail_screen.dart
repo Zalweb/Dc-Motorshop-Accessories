@@ -15,12 +15,68 @@ import '../../shared/widgets/glass_container.dart';
 import 'add_product_screen.dart';
 import '../../core/utils/stock_health.dart';
 
+import 'manage_variants_screen.dart';
+import 'widgets/variant_builder_widget.dart';
+
 /// Read-only product detail. Reactively follows the product list so edits made
 /// via the header's edit button reflect immediately.
 class ProductDetailScreen extends ConsumerWidget {
   const ProductDetailScreen({super.key, required this.productId});
 
   final int productId;
+
+  Future<void> _manageVariants(BuildContext context, WidgetRef ref, Product product) async {
+    final v1List = <String>[];
+    final v2List = <String>[];
+    for (final v in product.variants) {
+      if (v.option1 != null && !v1List.contains(v.option1)) v1List.add(v.option1!);
+      if (v.option2 != null && !v2List.contains(v.option2)) v2List.add(v.option2!);
+    }
+
+    final initialData = VariantBuilderData(
+      hasVariants: product.hasVariants,
+      variation1Name: product.variation1Name ?? 'Color',
+      variation1Options: v1List,
+      variation2Name: product.variation2Name ?? 'Size',
+      variation2Options: v2List,
+      variants: product.variants
+          .map((v) => ProductVariant()
+            ..uid = v.uid
+            ..name = v.name
+            ..option1 = v.option1
+            ..option2 = v.option2
+            ..sellingPrice = v.sellingPrice
+            ..costPrice = v.costPrice
+            ..stockQty = v.stockQty
+            ..barcode = v.barcode
+            ..imagePath = v.imagePath
+            ..imageUrl = v.imageUrl)
+          .toList(),
+    );
+
+    final result = await Navigator.of(context).push<VariantBuilderData>(
+      MaterialPageRoute(
+        builder: (_) => ManageVariantsScreen(
+          initialData: initialData,
+          productName: product.name,
+          defaultCostPrice: product.costPrice,
+          defaultSellingPrice: product.sellingPrice,
+          defaultStock: product.stockQty,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      final hasVariants = result.hasVariants && result.variants.isNotEmpty;
+      product
+        ..hasVariants = hasVariants
+        ..variation1Name = hasVariants ? result.variation1Name : null
+        ..variation2Name = (hasVariants && result.variation2Options.isNotEmpty) ? result.variation2Name : null
+        ..variants = hasVariants ? result.variants : []
+        ..stockQty = hasVariants ? result.variants.fold(0, (sum, v) => sum + v.stockQty) : product.stockQty;
+      await ref.read(productRepositoryProvider).save(product);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,6 +109,13 @@ class ProductDetailScreen extends ConsumerWidget {
         children: [
           _Header(product: product),
           const SizedBox(height: 20),
+          if (!product.isService) ...[
+            _VariantsCard(
+              product: product,
+              onManage: () => _manageVariants(context, ref, product),
+            ),
+            const SizedBox(height: 16),
+          ],
           _PricingCard(product: product),
           const SizedBox(height: 16),
           _InventoryCard(product: product),
@@ -129,6 +192,111 @@ class _ProductImage extends StatelessWidget {
   }
 }
 
+class _VariantsCard extends StatelessWidget {
+  const _VariantsCard({required this.product, required this.onManage});
+
+  final Product product;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    if (!product.hasVariants || product.variants.isEmpty) {
+      return _Card(
+        title: 'Variations',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No variations configured for this product.',
+              style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: const Text('+ Add Variations (Color, Size, etc.)'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(42),
+                side: BorderSide(color: primary.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _Card(
+      title: 'Variations (${product.variants.length})',
+      child: Column(
+        children: [
+          for (final variant in product.variants)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      variant.name,
+                      style: AppTextStyles.labelCaps.copyWith(color: primary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (variant.barcode != null && variant.barcode!.isNotEmpty)
+                    Text(
+                      '#${variant.barcode}',
+                      style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  const Spacer(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        formatPeso(variant.sellingPrice),
+                        style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        '${variant.stockQty} in stock',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: variant.stockQty > 0 ? AppColors.active : AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          FilledButton.tonalIcon(
+            onPressed: onManage,
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: const Text('Manage Variations & Stock'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(42),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PricingCard extends StatelessWidget {
   const _PricingCard({required this.product});
 
@@ -136,6 +304,34 @@ class _PricingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (product.hasVariants && product.variants.isNotEmpty) {
+      final minP = product.minSellingPrice;
+      final maxP = product.maxSellingPrice;
+      final priceDisplay = (minP - maxP).abs() < 0.01
+          ? formatPeso(minP)
+          : '${formatPeso(minP)} - ${formatPeso(maxP)}';
+
+      return _Card(
+        title: 'Pricing Summary',
+        child: Row(
+          children: [
+            Expanded(
+              child: _PriceColumn(
+                label: 'PRICE RANGE',
+                value: priceDisplay,
+              ),
+            ),
+            Expanded(
+              child: _PriceColumn(
+                label: 'TOTAL VARIANTS',
+                value: '${product.variants.length}',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final profit = product.sellingPrice - product.costPrice;
     final marginPct =
         product.sellingPrice > 0 ? profit / product.sellingPrice * 100 : 0;
@@ -224,7 +420,7 @@ class _InventoryCard extends StatelessWidget {
       );
     }
 
-    final qty = product.stockQty;
+    final qty = product.effectiveStockQty;
     final health = stockHealth(qty);
 
     return _Card(
@@ -234,7 +430,9 @@ class _InventoryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            '$qty PCS',
+            product.hasVariants && product.variants.isNotEmpty
+                ? '$qty PCS (Total)'
+                : '$qty PCS',
             style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700),
           ),
           Row(

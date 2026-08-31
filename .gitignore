@@ -32,3 +32,4 @@ test_db.isar
 key.properties
 supabase/.temp/
 supabase/.branch/
+*.apk

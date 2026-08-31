@@ -63,7 +63,7 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: accentColor,
           foregroundColor: AppColors.textPrimaryLight,
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size(64, 48),
           textStyle: AppTextStyles.button,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
@@ -155,7 +155,7 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: accentColor,
           foregroundColor: AppColors.textPrimary,
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size(64, 48),
           textStyle: AppTextStyles.button,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.buttonRadius),

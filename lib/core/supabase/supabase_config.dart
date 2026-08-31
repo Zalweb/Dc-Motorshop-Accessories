@@ -15,7 +15,7 @@ const String kSupabaseUrl = String.fromEnvironment(
 
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1enJ3cXFxaWRybnppcGhhbXpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTM2OTMsImV4cCI6MjA5MTk2OTY5M30.D_4oBV7sDo4-_4fZbvg7_-B8TyKcFfYUxtUXfmhsBS8',
+  defaultValue: 'sb_publishable_AHBbVOPcRTV430LAyTu42w_c62ohE4L',
 );
 
 /// Supabase Storage bucket name for product images.
