@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +8,6 @@ import 'package:http/http.dart' as http;
 
 import '../../core/router/route_paths.dart';
 import '../../core/supabase/supabase_config.dart';
-import '../../core/supabase/supabase_service.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -46,13 +44,6 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
 
   String get _otp => _controllers.map((c) => c.text).join();
 
-  /// SHA-256 hex hash — mirrors exactly what the Edge Function stores.
-  String _sha256Hex(String input) {
-    final bytes = utf8.encode(input);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
-
   Future<void> _verify() async {
     final otp = _otp;
     if (otp.length != 6) {
@@ -66,37 +57,29 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     });
 
     try {
-      final supabase = SupabaseService.client;
+      final fnUrl = '$kSupabaseUrl/functions/v1/verify-otp';
 
-      // Fetch the latest unused OTP row for this email
-      final rows = await supabase
-          .from('password_resets')
-          .select()
-          .eq('email', widget.email)
-          .eq('used', false)
-          .order('created_at', ascending: false)
-          .limit(1);
+      final res = await http.post(
+        Uri.parse(fnUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': kSupabaseAnonKey,
+        },
+        body: jsonEncode({
+          'email': widget.email.trim().toLowerCase(),
+          'otp': otp,
+        }),
+      );
 
-      if (rows.isEmpty) {
-        throw Exception('No reset code found. Please request a new one.');
-      }
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
 
-      final row = rows.first;
-      final expiresAt = DateTime.parse(row['expires_at'] as String);
-
-      if (DateTime.now().isAfter(expiresAt)) {
-        throw Exception('Code has expired. Please request a new one.');
-      }
-
-      // Compare SHA-256 of typed OTP with stored hash
-      final inputHash = _sha256Hex(otp);
-      if (inputHash != (row['otp_hash'] as String)) {
-        throw Exception('Incorrect code. Please try again.');
+      if (res.statusCode != 200 || body['error'] != null) {
+        throw Exception(body['error'] ?? 'Incorrect code. Please try again.');
       }
 
       if (!mounted) return;
       // Navigate to reset password, passing email and otp
-      context.push(RoutePaths.resetPassword, extra: {'email': widget.email, 'otp': otp});
+      context.push(RoutePaths.resetPassword, extra: {'email': widget.email.trim().toLowerCase(), 'otp': otp});
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {

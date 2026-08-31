@@ -1,13 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-// ignore: unused_import — UserAttributes is used (re-exported via supabase_service)
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/providers.dart';
 import '../../core/router/route_paths.dart';
-// ignore: unused_import — SupabaseService.client is used in _submit
-import '../../core/supabase/supabase_service.dart';
+import '../../core/supabase/supabase_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../shared/widgets/glass_container.dart';
@@ -54,23 +54,30 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
       // 1. Update password in local Isar database (silently skips if not found locally)
       await authRepo.changePasswordByEmail(
-        email: widget.email,
+        email: widget.email.trim().toLowerCase(),
         newPassword: _newPass.text,
       );
 
       // 2. Securely call the Edge Function to reset password in Supabase Auth
-      final res = await SupabaseService.client.functions.invoke(
-        'reset-password',
-        body: {
-          'email': widget.email,
+      final fnUrl = '$kSupabaseUrl/functions/v1/reset-password';
+
+      final res = await http.post(
+        Uri.parse(fnUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': kSupabaseAnonKey,
+        },
+        body: jsonEncode({
+          'email': widget.email.trim().toLowerCase(),
           'new_password': _newPass.text,
           'otp': widget.otp,
-        },
+        }),
       );
 
-      final data = res.data;
-      if (data is Map && data['error'] != null) {
-        throw Exception(data['error'].toString());
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+      if (res.statusCode != 200 || body['error'] != null) {
+        throw Exception(body['error'] ?? 'Failed to reset password');
       }
 
       setState(() => _success = true);
