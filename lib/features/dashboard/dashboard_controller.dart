@@ -176,6 +176,18 @@ double _dayRevenue(List<Sale> sales, DateTime dayStart) {
   );
 }
 
+/// Indicates whether the initial dashboard data is currently loading from streams.
+/// Returns true only when streams are loading without any cached/existing values yet,
+/// avoiding unwanted blanking or flickering during periodic background stream syncs.
+final dashboardLoadingProvider = Provider<bool>((ref) {
+  final sales = ref.watch(saleListStreamProvider);
+  final products = ref.watch(productListStreamProvider);
+  final expenses = ref.watch(expenseListStreamProvider);
+  return (sales.isLoading && !sales.hasValue) ||
+      (products.isLoading && !products.hasValue) ||
+      (expenses.isLoading && !expenses.hasValue);
+});
+
 /// Recomputes whenever sales, expenses, or the period selection change.
 final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
   final includeUnpaid = ref

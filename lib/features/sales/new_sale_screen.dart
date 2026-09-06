@@ -13,6 +13,7 @@ import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/floating_add_popup.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/tactile_button.dart';
 import 'cart_controller.dart';
 import 'cart_sheet.dart';
@@ -341,9 +342,38 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
             // Product grid
             Expanded(
               child: productsAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('$e')),
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
+                loading: () {
+                  final screenWidth = MediaQuery.sizeOf(context).width;
+                  final isWide = screenWidth >= 800;
+                  final crossAxisCount = isWide
+                      ? (screenWidth >= 1400 ? 5 : (screenWidth >= 1100 ? 4 : 3))
+                      : 2;
+                  return Shimmer(
+                    child: GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      gridDelegate:
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 14,
+                        mainAxisSpacing: 14,
+                        childAspectRatio: 0.72,
+                      ),
+                      itemCount: crossAxisCount * 3,
+                      itemBuilder: (_, _) => const SkeletonPosProductCard(),
+                    ),
+                  );
+                },
+                error: (e, _) => EmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: 'Unable to load products',
+                  body: '$e',
+                  action: FilledButton.tonal(
+                    onPressed: () => ref.invalidate(productListStreamProvider),
+                    child: const Text('Retry'),
+                  ),
+                ),
                 data: (all) {
                   final filtered = _apply(all);
                   if (filtered.isEmpty) {

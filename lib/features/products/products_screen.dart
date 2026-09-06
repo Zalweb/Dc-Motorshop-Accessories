@@ -15,6 +15,7 @@ import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/filter_chips.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 
 enum ProductSort {
   nameAsc('Name A-Z'),
@@ -411,9 +412,44 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               const SizedBox(height: 12),
               Expanded(
                 child: productsAsync.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('$e')),
+                  skipLoadingOnReload: true,
+                  skipLoadingOnRefresh: true,
+                  loading: () {
+                    final screenWidth = MediaQuery.sizeOf(context).width;
+                    final isWide = screenWidth >= 800;
+                    if (isWide) {
+                      return Shimmer(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: screenWidth >= 1300 ? 3 : 2,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 2.8,
+                          ),
+                          itemCount: 6,
+                          itemBuilder: (_, _) => const SkeletonProductRow(),
+                        ),
+                      );
+                    }
+                    return Shimmer(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: 8,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (_, _) => const SkeletonProductRow(),
+                      ),
+                    );
+                  },
+                  error: (e, _) => EmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: 'Unable to load products',
+                    body: '$e',
+                    action: FilledButton.tonal(
+                      onPressed: () => ref.invalidate(productListStreamProvider),
+                      child: const Text('Retry'),
+                    ),
+                  ),
                   data: (products) {
                     final filtered = _apply(
                       products,

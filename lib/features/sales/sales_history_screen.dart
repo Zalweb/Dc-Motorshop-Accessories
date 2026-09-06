@@ -8,6 +8,7 @@ import '../../core/utils/money.dart';
 import '../../data/models/sale.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import 'sale_detail_screen.dart';
 import 'sale_payment.dart';
 import 'sales_export.dart';
@@ -149,7 +150,8 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
   Widget build(BuildContext context) {
     // Read like the dashboard/reports do (.value) so a transient loading/error
     // tick on the stream can't hide sales that are already present.
-    final sales = ref.watch(saleListStreamProvider).value;
+    final salesAsync = ref.watch(saleListStreamProvider);
+    final sales = salesAsync.value;
     final theme = Theme.of(context);
     final filterActive = _filter != DateFilter.all;
 
@@ -201,8 +203,43 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
           Expanded(
             child: Builder(
               builder: (_) {
+                if (sales == null && salesAsync.isLoading) {
+                  final screenWidth = MediaQuery.sizeOf(context).width;
+                  final isWide = screenWidth >= 800;
+                  if (isWide) {
+                    return Shimmer(
+                      child: GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: screenWidth >= 1300 ? 3 : 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 2.8,
+                        ),
+                        itemCount: 6,
+                        itemBuilder: (_, _) => const SkeletonSaleTile(),
+                      ),
+                    );
+                  }
+                  return Shimmer(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: 8,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (_, _) => const SkeletonSaleTile(),
+                    ),
+                  );
+                }
                 if (sales == null) {
-                  return const Center(child: CircularProgressIndicator());
+                  return EmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: 'Unable to load sales',
+                    body: salesAsync.error?.toString() ?? 'Please check your connection and try again.',
+                    action: FilledButton.tonal(
+                      onPressed: () => ref.invalidate(saleListStreamProvider),
+                      child: const Text('Retry'),
+                    ),
+                  );
                 }
                 final filtered = _apply(sales);
                 if (filtered.isEmpty) {

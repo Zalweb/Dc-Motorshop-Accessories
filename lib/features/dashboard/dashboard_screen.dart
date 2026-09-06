@@ -10,13 +10,14 @@ import '../../core/utils/money.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/metric_card.dart';
 import '../../shared/widgets/shop_logo.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/staggered_entrance.dart';
 import 'dashboard_controller.dart';
 import 'widgets/desktop_dashboard_view.dart';
 import '../expenses/expenses_screen.dart';
 import '../products/products_screen.dart';
 import 'reports_screen.dart';
-import 'package:iconoir_flutter/iconoir_flutter.dart' hide Text, Navigator, List;
+import 'package:iconoir_flutter/iconoir_flutter.dart' hide Text, Navigator, List, Radius;
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -40,6 +41,7 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(dashboardLoadingProvider);
     final summary = ref.watch(dashboardSummaryProvider);
     final period = ref.watch(dashboardPeriodProvider);
     final settings = ref.watch(businessSettingsStreamProvider).value;
@@ -89,6 +91,7 @@ class DashboardScreen extends ConsumerWidget {
             child: DesktopDashboardView(
               summary: summary,
               period: period,
+              isLoading: isLoading,
             ),
           ),
         ),
@@ -112,9 +115,115 @@ class DashboardScreen extends ConsumerWidget {
               }
             }
           },
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            children: [
+          child: isLoading
+              ? Shimmer(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          ShopLogo(
+                            logoPath: settings?.logoPath,
+                            size: 40,
+                            borderRadius: BorderRadius.circular(12),
+                            fit: BoxFit.contain,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              shopName,
+                              style: AppTextStyles.headingMedium.copyWith(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Period selector skeleton
+                      const SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: BouncingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            SkeletonBox(
+                              width: 72,
+                              height: 36,
+                              borderRadius: BorderRadius.all(Radius.circular(20)),
+                            ),
+                            SizedBox(width: 8),
+                            SkeletonBox(
+                              width: 82,
+                              height: 36,
+                              borderRadius: BorderRadius.all(Radius.circular(20)),
+                            ),
+                            SizedBox(width: 8),
+                            SkeletonBox(
+                              width: 78,
+                              height: 36,
+                              borderRadius: BorderRadius.all(Radius.circular(20)),
+                            ),
+                            SizedBox(width: 8),
+                            SkeletonBox(
+                              width: 86,
+                              height: 36,
+                              borderRadius: BorderRadius.all(Radius.circular(20)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Revenue hero skeleton
+                      const SkeletonRevenueHero(),
+                      const SizedBox(height: 28),
+
+                      Text(
+                        'AT A GLANCE',
+                        style: AppTextStyles.labelCaps.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Metrics grid skeleton
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 1.15,
+                        children: const [
+                          SkeletonMetricCard(),
+                          SkeletonMetricCard(),
+                          SkeletonMetricCard(),
+                          SkeletonMetricCard(),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Small metric cards row skeleton
+                      Builder(builder: (context) {
+                        final screenWidth = MediaQuery.sizeOf(context).width;
+                        final cardGap = screenWidth < 380 ? 8.0 : 12.0;
+                        return Row(
+                          children: [
+                            const Expanded(child: SkeletonSmallMetricCard()),
+                            SizedBox(width: cardGap),
+                            const Expanded(child: SkeletonSmallMetricCard()),
+                            SizedBox(width: cardGap),
+                            const Expanded(child: SkeletonSmallMetricCard()),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  children: [
               // Header
             Row(
               children: [

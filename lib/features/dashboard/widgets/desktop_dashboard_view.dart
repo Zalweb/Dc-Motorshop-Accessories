@@ -10,6 +10,7 @@ import '../../../core/utils/money.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/glass_container.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../../products/products_screen.dart';
 import '../../sales/sales_export.dart';
 import '../dashboard_controller.dart';
@@ -23,10 +24,12 @@ class DesktopDashboardView extends ConsumerWidget {
     super.key,
     required this.summary,
     required this.period,
+    this.isLoading = false,
   });
 
   final DashboardSummary summary;
   final DashboardPeriod period;
+  final bool isLoading;
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -57,6 +60,41 @@ class DesktopDashboardView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+
+    if (isLoading) {
+      return Shimmer(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+          children: [
+            // 1. Header with greeting & date / export controls
+            _buildHeader(context, ref, theme, primary),
+            const SizedBox(height: 24),
+
+            // 2. Four KPI cards skeleton row
+            _buildKpiSkeletonRow(),
+            const SizedBox(height: 24),
+
+            // 3. Middle row: Revenue Overview + Top Selling Products skeletons
+            _buildMiddleSkeletonRow(),
+            const SizedBox(height: 28),
+
+            // 4. "AT A GLANCE" Section Header
+            Text(
+              'AT A GLANCE',
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // 5. Bottom row skeletons
+            _buildBottomSkeletonRow(),
+          ],
+        ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
@@ -1293,6 +1331,134 @@ class DesktopDashboardView extends ConsumerWidget {
           child,
         ],
       ),
+    );
+  }
+
+  Widget _buildKpiSkeletonRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cards = List.generate(4, (_) => const SkeletonKpiCard());
+        if (constraints.maxWidth >= 840) {
+          return Row(
+            children: [
+              Expanded(child: cards[0]),
+              const SizedBox(width: 14),
+              Expanded(child: cards[1]),
+              const SizedBox(width: 14),
+              Expanded(child: cards[2]),
+              const SizedBox(width: 14),
+              Expanded(child: cards[3]),
+            ],
+          );
+        }
+        if (constraints.maxWidth >= 520) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 14),
+                  Expanded(child: cards[1]),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: cards[2]),
+                  const SizedBox(width: 14),
+                  Expanded(child: cards[3]),
+                ],
+              ),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            cards[0],
+            const SizedBox(height: 12),
+            cards[1],
+            const SizedBox(height: 12),
+            cards[2],
+            const SizedBox(height: 12),
+            cards[3],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMiddleSkeletonRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SkeletonRevenueOverviewCard(),
+              SizedBox(height: 18),
+              SkeletonTopSellingCard(),
+            ],
+          );
+        }
+        return const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 62, child: SkeletonRevenueOverviewCard()),
+            SizedBox(width: 18),
+            Expanded(flex: 38, child: SkeletonTopSellingCard()),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomSkeletonRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const paymentCard = SkeletonDonutCard(title: 'Sales by Payment Method');
+        const txCard = SkeletonDonutCard(title: 'Transaction Status');
+        const stockCard = SkeletonLowStockCard();
+
+        if (constraints.maxWidth >= 1200) {
+          return const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 35, child: paymentCard),
+              SizedBox(width: 18),
+              Expanded(flex: 35, child: txCard),
+              SizedBox(width: 18),
+              Expanded(flex: 30, child: stockCard),
+            ],
+          );
+        }
+        if (constraints.maxWidth >= 720) {
+          return const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: paymentCard),
+                  SizedBox(width: 18),
+                  Expanded(child: txCard),
+                ],
+              ),
+              SizedBox(height: 18),
+              stockCard,
+            ],
+          );
+        }
+        return const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            paymentCard,
+            SizedBox(height: 14),
+            txCard,
+            SizedBox(height: 14),
+            stockCard,
+          ],
+        );
+      },
     );
   }
 }
