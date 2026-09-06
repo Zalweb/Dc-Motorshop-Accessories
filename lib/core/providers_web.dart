@@ -18,6 +18,9 @@ import '../data/repositories/sale_repository_web.dart';
 import '../data/repositories/settings_repository_web.dart';
 import 'supabase/supabase_providers_web.dart';
 import 'supabase/supabase_service.dart';
+import 'update/app_update_controller.dart';
+import 'update/app_update_info.dart';
+import 'update/app_update_service.dart';
 
 /// Bound in main() after SharedPreferences loads.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
@@ -97,4 +100,13 @@ final expenseListStreamProvider = StreamProvider<List<Expense>>(
 final recentInventoryTransactionsStreamProvider =
     StreamProvider<List<InventoryTransaction>>(
   (ref) => ref.watch(inventoryRepositoryProvider).watchRecent(),
+);
+
+final appUpdateServiceProvider = Provider<AppUpdateService>(
+  (ref) => AppUpdateService(),
+);
+
+final appUpdateControllerProvider =
+    AsyncNotifierProvider<AppUpdateNotifier, AppUpdateInfo?>(
+  AppUpdateNotifier.new,
 );

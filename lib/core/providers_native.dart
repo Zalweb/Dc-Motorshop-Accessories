@@ -18,6 +18,9 @@ import '../data/repositories/sale_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import 'db/isar_service.dart';
 import 'supabase/supabase_providers.dart';
+import 'update/app_update_controller.dart';
+import 'update/app_update_info.dart';
+import 'update/app_update_service.dart';
 
 /// Bound in main() after Isar opens. Repositories read the Isar instance here.
 final isarServiceProvider = Provider<IsarService>(
@@ -110,5 +113,14 @@ final expenseListStreamProvider = StreamProvider<List<Expense>>(
 final recentInventoryTransactionsStreamProvider =
     StreamProvider<List<InventoryTransaction>>(
   (ref) => ref.watch(inventoryRepositoryProvider).watchRecent(),
+);
+
+final appUpdateServiceProvider = Provider<AppUpdateService>(
+  (ref) => AppUpdateService(),
+);
+
+final appUpdateControllerProvider =
+    AsyncNotifierProvider<AppUpdateNotifier, AppUpdateInfo?>(
+  AppUpdateNotifier.new,
 );
 

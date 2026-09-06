@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_version.dart';
 import '../../core/providers.dart';
 import '../../core/router/route_paths.dart';
 import '../../core/supabase/supabase_providers.dart';
@@ -9,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/motion_controller.dart';
 import '../../core/theme/theme_mode_controller.dart';
+import '../../core/update/widgets/update_dialog.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/shop_logo.dart';
 import '../auth/auth_controller.dart';
@@ -398,6 +400,14 @@ class MoreScreen extends ConsumerWidget {
           const SizedBox(height: 28),
 
           Text(
+            'SYSTEM & UPDATES',
+            style: AppTextStyles.labelCaps.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          const _AppUpdateCard(),
+          const SizedBox(height: 28),
+
+          Text(
             'ADVANCED',
             style: AppTextStyles.labelCaps.copyWith(fontWeight: FontWeight.w800),
           ),
@@ -642,6 +652,15 @@ class _DeveloperFooter extends StatelessWidget {
             color: theme.colorScheme.onSurface,
           ),
         ),
+        const SizedBox(height: 4),
+        Text(
+          AppVersion.displayVersion,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         Text(
           'Designed & developed by',
@@ -808,6 +827,148 @@ class _BusinessCard extends StatelessWidget {
             ],
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Settings tile/card showing current software version and offering one-tap update check.
+class _AppUpdateCard extends ConsumerStatefulWidget {
+  const _AppUpdateCard();
+
+  @override
+  ConsumerState<_AppUpdateCard> createState() => _AppUpdateCardState();
+}
+
+class _AppUpdateCardState extends ConsumerState<_AppUpdateCard> {
+  bool _isManualChecking = false;
+
+  Future<void> _checkUpdate() async {
+    setState(() => _isManualChecking = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final info = await ref
+          .read(appUpdateControllerProvider.notifier)
+          .checkForUpdate(force: true);
+
+      if (!mounted) return;
+
+      if (info == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to check for updates. Please check your internet connection and try again.',
+            ),
+          ),
+        );
+      } else if (info.hasUpdate) {
+        UpdateDialog.show(context, info: info);
+      } else {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'You are up to date! MoSPAMS v${info.currentVersion} is the latest version.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Could not check for updates: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isManualChecking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final updateState = ref.watch(appUpdateControllerProvider);
+    final info = updateState.value;
+    final hasUpdate = info?.hasUpdate ?? false;
+
+    if (hasUpdate) {
+      return Container(
+        decoration: BoxDecoration(
+          color: primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: primary.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primary,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.rocket_launch_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          title: Text(
+            'New Version Available: v${info!.latestVersion}',
+            style: AppTextStyles.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          subtitle: Text(
+            'Tap to review release notes and update safely',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: FilledButton(
+            onPressed: () => UpdateDialog.show(context, info: info),
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Update'),
+          ),
+          onTap: () => UpdateDialog.show(context, info: info),
+        ),
+      );
+    }
+
+    return GlassContainer(
+      borderRadius: BorderRadius.circular(16),
+      child: ListTile(
+        leading: Icon(Icons.system_update_alt_rounded, color: primary),
+        title: Text('Software Version', style: AppTextStyles.body),
+        subtitle: Text(
+          '${AppVersion.displayVersion} · Tap to check',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        trailing: _isManualChecking || updateState.isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : OutlinedButton(
+                onPressed: _checkUpdate,
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Check'),
+              ),
+        onTap: _isManualChecking || updateState.isLoading ? null : _checkUpdate,
       ),
     );
   }

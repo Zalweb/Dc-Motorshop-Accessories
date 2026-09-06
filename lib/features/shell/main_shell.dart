@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers.dart';
 import '../../core/router/page_transitions.dart';
+import '../../core/update/widgets/update_banner.dart';
+import '../../core/update/widgets/update_dialog.dart';
 import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_side_nav.dart';
 import '../../shared/widgets/connectivity_banner.dart';
@@ -9,21 +13,40 @@ import '../../shared/widgets/sync_status_banner.dart';
 
 /// Hosts the primary tabs behind a responsive navigation shell:
 /// SideNav on wide screens (desktop/tablet >= 800px) and BottomNav on mobile.
-class MainShell extends StatelessWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+  bool _checkedMandatory = false;
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen(appUpdateControllerProvider, (_, next) {
+      final info = next.value;
+      if (info != null && info.hasUpdate && info.isMandatory && !_checkedMandatory) {
+        _checkedMandatory = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            UpdateDialog.show(context, info: info, isDismissible: false);
+          }
+        });
+      }
+    });
+
     final isWide = MediaQuery.sizeOf(context).width >= 800;
 
     final content = Stack(
       children: [
         // The actual tab content with smooth motion & cross-fade
         AppPageTransitions.buildTabSwitcher(
-          currentIndex: navigationShell.currentIndex,
-          child: navigationShell,
+          currentIndex: widget.navigationShell.currentIndex,
+          child: widget.navigationShell,
         ),
 
         // Online / offline banner — slides in from top when connectivity changes.
@@ -41,6 +64,14 @@ class MainShell extends StatelessWidget {
           right: 0,
           child: SyncStatusBanner(),
         ),
+
+        // Software update banner — slides down when a newer release is published.
+        const Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: UpdateNotificationBanner(),
+        ),
       ],
     );
 
@@ -49,10 +80,10 @@ class MainShell extends StatelessWidget {
         body: Row(
           children: [
             AppSideNav(
-              currentIndex: navigationShell.currentIndex,
-              onTap: (index) => navigationShell.goBranch(
+              currentIndex: widget.navigationShell.currentIndex,
+              onTap: (index) => widget.navigationShell.goBranch(
                 index,
-                initialLocation: index == navigationShell.currentIndex,
+                initialLocation: index == widget.navigationShell.currentIndex,
               ),
             ),
             Expanded(child: content),
@@ -65,10 +96,10 @@ class MainShell extends StatelessWidget {
       extendBody: false,
       body: content,
       bottomNavigationBar: AppBottomNav(
-        currentIndex: navigationShell.currentIndex,
-        onTap: (index) => navigationShell.goBranch(
+        currentIndex: widget.navigationShell.currentIndex,
+        onTap: (index) => widget.navigationShell.goBranch(
           index,
-          initialLocation: index == navigationShell.currentIndex,
+          initialLocation: index == widget.navigationShell.currentIndex,
         ),
       ),
     );
