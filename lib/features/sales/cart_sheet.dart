@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +8,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/sale.dart';
+import '../../shared/widgets/app_image.dart';
 import '../../shared/widgets/glass_container.dart';
+import '../../shared/widgets/tactile_button.dart';
 import '../customers/customers_screen.dart';
 import 'cart_controller.dart';
 
@@ -25,24 +25,32 @@ Future<Sale?> showCartSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => const _CartSheet(),
+    builder: (_) => const CartSheet(),
   );
 }
 
 const _amountPresets = [50.0, 100.0, 200.0, 500.0];
 
-class _CartSheet extends ConsumerStatefulWidget {
-  const _CartSheet();
+class CartSheet extends ConsumerStatefulWidget {
+  const CartSheet({
+    super.key,
+    this.isSidebar = false,
+    this.onSaleCompleted,
+  });
+
+  final bool isSidebar;
+  final ValueChanged<Sale>? onSaleCompleted;
 
   @override
-  ConsumerState<_CartSheet> createState() => _CartSheetState();
+  ConsumerState<CartSheet> createState() => _CartSheetState();
 }
 
-class _CartSheetState extends ConsumerState<_CartSheet> {
+class _CartSheetState extends ConsumerState<CartSheet> {
   final _customer = TextEditingController();
   final _customerFocus = FocusNode();
   final _notes = TextEditingController();
   final _amount = TextEditingController();
+  final _discount = TextEditingController();
   final _changeGiven = TextEditingController();
 
   String _method = 'cash';
@@ -60,6 +68,7 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
   void initState() {
     super.initState();
     _amount.addListener(_onAmountChanged);
+    _discount.addListener(_onAmountChanged);
     _customer.addListener(_onCustomerChanged);
   }
 
@@ -74,8 +83,15 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
 
   bool get _requiresCustomer => _status != 'paid';
 
+  double get _discountValue => double.tryParse(_discount.text.trim()) ?? 0.0;
+
+  double get _effectiveTotal {
+    final subtotal = ref.read(cartControllerProvider.notifier).total;
+    return (subtotal - _discountValue).clamp(0.0, double.infinity);
+  }
+
   void _onAmountChanged() {
-    final total = ref.read(cartControllerProvider.notifier).total;
+    final total = _effectiveTotal;
     final received = double.tryParse(_amount.text) ?? 0;
     // Only auto-update status when user has actually typed something
     if (_amount.text.trim().isNotEmpty) {
@@ -102,6 +118,7 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
     _customerFocus.dispose();
     _notes.dispose();
     _amount.dispose();
+    _discount.dispose();
     _changeGiven.dispose();
     super.dispose();
   }
@@ -216,6 +233,7 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
             status: effectiveStatus,
             paymentMethod: _method,
             amountReceived: received,
+            discount: _discountValue,
             notes: _composeNotes(),
             date: _customDate,
           );
@@ -233,6 +251,17 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
       return;
     }
     if (!mounted) return;
+    if (widget.isSidebar) {
+      widget.onSaleCompleted?.call(sale);
+      setState(() {
+        _saving = false;
+        _amount.clear();
+        _customer.clear();
+        _notes.clear();
+        _change = 0;
+      });
+      return;
+    }
     Navigator.of(context).pop(sale);
   }
 
@@ -241,12 +270,13 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
     final theme = Theme.of(context);
     final cart = ref.watch(cartControllerProvider);
     final notifier = ref.read(cartControllerProvider.notifier);
-    final total = notifier.total;
+    final subtotal = notifier.total;
+    final total = (subtotal - _discountValue).clamp(0.0, double.infinity);
     final itemCount = cart.fold(0, (sum, l) => sum + l.quantity);
 
     // Resolve item thumbnails by product id.
     final products = ref.watch(productListStreamProvider).value ?? [];
-    final imageById = {for (final p in products) p.id: p.imagePath};
+    final productById = {for (final p in products) p.id: p};
 
     // Existing customers (for the dropdown) and the one matching the typed name.
     final existingCustomers =
@@ -260,18 +290,18 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
       }
     }
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.92,
-        child: Column(
-          children: [
-            _SheetHeader(itemCount: itemCount, total: total),
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                children: [
+    final body = Column(
+      children: [
+        _SheetHeader(
+          itemCount: itemCount,
+          total: total,
+          isSidebar: widget.isSidebar,
+        ),
+        Divider(height: 1, color: theme.colorScheme.outlineVariant),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -290,7 +320,8 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
                         unitPrice: line.unitPrice,
                         quantity: line.quantity,
                         lineTotal: line.lineTotal,
-                        imagePath: imageById[line.productId],
+                        imageUrl: productById[line.productId]?.imageUrl,
+                        imagePath: productById[line.productId]?.imagePath,
                         onAdd: () => notifier.increment(line.productId,
                             variantUid: line.variantUid),
                         onRemove: () => notifier.decrement(line.productId,
@@ -361,36 +392,74 @@ class _CartSheetState extends ConsumerState<_CartSheet> {
                   ],
 
                   const SizedBox(height: 20),
+                  _SectionLabel('Discount (optional)'),
+                  const SizedBox(height: 10),
+                  _AmountField(controller: _discount),
+                  const SizedBox(height: 20),
                   _SectionLabel('Notes'),
                   const SizedBox(height: 10),
                   _Field(controller: _notes, hint: 'Add a note...'),
                   const SizedBox(height: 16),
                   _DateButton(date: _customDate, onTap: _pickDateTime),
                   const SizedBox(height: 16),
-                  _TotalCard(total: total),
+                  _TotalCard(
+                    subtotal: subtotal,
+                    discount: _discountValue,
+                    total: total,
+                  ),
                 ],
               ),
             ),
-            _SheetFooter(
-              total: total,
-              itemCount: itemCount,
-              enabled: cart.isNotEmpty && !_saving,
-              saving: _saving,
-              onClear: cart.isEmpty ? null : notifier.clear,
-              onCreate: _createSale,
+              _SheetFooter(
+                total: total,
+                itemCount: itemCount,
+                enabled: cart.isNotEmpty && !_saving,
+                saving: _saving,
+                onClear: cart.isEmpty ? null : notifier.clear,
+                onCreate: _createSale,
+              ),
+            ],
+          );
+
+    if (widget.isSidebar) {
+      return Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            left: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25),
+              width: 1,
             ),
-          ],
+          ),
         ),
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: body,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.92,
+        child: body,
       ),
     );
   }
 }
 
 class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.itemCount, required this.total});
+  const _SheetHeader({
+    required this.itemCount,
+    required this.total,
+    this.isSidebar = false,
+  });
 
   final int itemCount;
   final double total;
+  final bool isSidebar;
 
   @override
   Widget build(BuildContext context) {
@@ -405,9 +474,9 @@ class _SheetHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Current Order',
+                  isSidebar ? 'POS Cart' : 'Current Order',
                   style: AppTextStyles.headingMedium.copyWith(
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -422,11 +491,13 @@ class _SheetHeader extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton.filledTonal(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-          ),
+          if (!isSidebar) ...[
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+            ),
+          ],
         ],
       ),
     );
@@ -439,7 +510,8 @@ class _CartItemCard extends StatelessWidget {
     required this.unitPrice,
     required this.quantity,
     required this.lineTotal,
-    required this.imagePath,
+    this.imageUrl,
+    this.imagePath,
     required this.onAdd,
     required this.onRemove,
     required this.onDelete,
@@ -449,6 +521,7 @@ class _CartItemCard extends StatelessWidget {
   final double unitPrice;
   final int quantity;
   final double lineTotal;
+  final String? imageUrl;
   final String? imagePath;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
@@ -465,7 +538,11 @@ class _CartItemCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Thumb(imagePath: imagePath, size: 44),
+              _Thumb(
+                imageUrl: imageUrl,
+                imagePath: imagePath,
+                size: 44,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -550,47 +627,44 @@ class _RoundBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(10),
+    return TactileButton(
+      scaleDown: 0.88,
+      hoverScale: 1.12,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
         ),
-        child: Icon(icon, color: color, size: 20),
       ),
     );
   }
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({required this.imagePath, this.size = 44});
+  const _Thumb({this.imageUrl, this.imagePath, this.size = 44});
 
+  final String? imageUrl;
   final String? imagePath;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (imagePath != null && File(imagePath!).existsSync()) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.file(File(imagePath!),
-            width: size, height: size, fit: BoxFit.cover),
-      );
-    }
-    return Container(
+    return AppImage(
+      imageUrl: imageUrl,
+      imagePath: imagePath,
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(Icons.inventory_2_outlined,
-          color: theme.colorScheme.onSurfaceVariant, size: size * 0.5),
+      borderRadius: BorderRadius.circular(10),
+      fit: BoxFit.cover,
+      placeholderIcon: Icons.inventory_2_outlined,
+      placeholderIconSize: size * 0.5,
     );
   }
 }
@@ -619,38 +693,42 @@ class _MethodRow extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(right: id == 'card' ? 0 : 10),
-              child: InkWell(
-                onTap: () => onChanged(id),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: value == id
-                        ? primary
-                        : theme.colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
+              child: TactileButton(
+                scaleDown: 0.94,
+                hoverScale: 1.04,
+                child: InkWell(
+                  onTap: () => onChanged(id),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
                       color: value == id
                           ? primary
-                          : theme.colorScheme.outlineVariant,
+                          : theme.colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: value == id
+                            ? primary
+                            : theme.colorScheme.outlineVariant,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(icon,
-                          size: 20,
-                          color: value == id
-                              ? Colors.white
-                              : theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(height: 6),
-                      Text(label,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            fontWeight: FontWeight.w700,
+                    child: Column(
+                      children: [
+                        Icon(icon,
+                            size: 20,
                             color: value == id
                                 ? Colors.white
-                                : theme.colorScheme.onSurface,
-                          )),
-                    ],
+                                : theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(height: 6),
+                        Text(label,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: value == id
+                                  ? Colors.white
+                                  : theme.colorScheme.onSurface,
+                            )),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -677,20 +755,24 @@ class _AmountPresets extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           final value = _amountPresets[i];
-          return InkWell(
-            onTap: () => onPick(value),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
+          return TactileButton(
+            scaleDown: 0.92,
+            hoverScale: 1.05,
+            child: InkWell(
+              onTap: () => onPick(value),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Text(formatPeso(value),
+                    style: AppTextStyles.body
+                        .copyWith(fontWeight: FontWeight.w700)),
               ),
-              child: Text(formatPeso(value),
-                  style: AppTextStyles.body
-                      .copyWith(fontWeight: FontWeight.w700)),
             ),
           );
         },
@@ -918,21 +1000,69 @@ class _DateButton extends StatelessWidget {
 }
 
 class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.total});
+  const _TotalCard({
+    required this.subtotal,
+    this.discount = 0,
+    required this.total,
+  });
 
+  final double subtotal;
+  final double discount;
   final double total;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       borderRadius: BorderRadius.circular(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          Text('Total',
-              style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
-          Text(formatPeso(total), style: AppTextStyles.headingLarge),
+          if (discount > 0) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Subtotal',
+                  style: AppTextStyles.body.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  formatPeso(subtotal),
+                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Discount',
+                  style: AppTextStyles.body.copyWith(color: AppColors.expense),
+                ),
+                Text(
+                  '−${formatPeso(discount)}',
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.expense,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Divider(color: theme.colorScheme.outlineVariant, height: 1),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total',
+                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
+              Text(formatPeso(total), style: AppTextStyles.headingLarge),
+            ],
+          ),
         ],
       ),
     );
@@ -1009,18 +1139,23 @@ class _SheetFooter extends StatelessWidget {
                 _ClearButton(onTap: onClear),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: enabled ? onCreate : null,
-                    icon: saving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2.4))
-                        : const Icon(Icons.check_circle_outline),
-                    label: const Text('CREATE SALE'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
+                  child: TactileButton(
+                    enabled: enabled && !saving,
+                    scaleDown: 0.96,
+                    hoverScale: 1.015,
+                    child: FilledButton.icon(
+                      onPressed: enabled ? onCreate : null,
+                      icon: saving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.4))
+                          : const Icon(Icons.check_circle_outline),
+                      label: const Text('CREATE SALE'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(56),
+                      ),
                     ),
                   ),
                 ),
@@ -1040,18 +1175,23 @@ class _ClearButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppColors.danger.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.danger.withValues(alpha: 0.5)),
+    return TactileButton(
+      enabled: onTap != null,
+      scaleDown: 0.90,
+      hoverScale: 1.08,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.danger.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.danger.withValues(alpha: 0.5)),
+          ),
+          child: const Icon(Icons.delete_outline, color: AppColors.danger),
         ),
-        child: const Icon(Icons.delete_outline, color: AppColors.danger),
       ),
     );
   }

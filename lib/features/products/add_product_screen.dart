@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +8,7 @@ import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/product.dart';
+import '../../shared/widgets/app_image.dart';
 import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/glass_container.dart';
 import 'manage_variants_screen.dart';
@@ -277,6 +276,42 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     context.pop();
   }
 
+  Future<void> _deleteProduct() async {
+    final edit = widget.editProduct;
+    if (edit == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Product?'),
+        content: Text(
+          'Are you sure you want to delete "${edit.name}"? '
+          'This will remove it from the catalog and cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await ref.read(productRepositoryProvider).delete(edit.uid);
+      if (mounted) {
+        context.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "${edit.name}"')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoryListStreamProvider).value ?? [];
@@ -286,6 +321,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.editProduct != null ? 'Edit Product' : 'Add Product'),
+        actions: [
+          if (widget.editProduct != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+              tooltip: 'Delete Product',
+              onPressed: _deleteProduct,
+            ),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -587,11 +630,14 @@ class _ImageBox extends StatelessWidget {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
 
-    if (imagePath != null) {
-      return ClipRRect(
+    if (imagePath != null && imagePath!.isNotEmpty) {
+      return AppImage(
+        imagePath: imagePath,
+        imageUrl: imagePath,
+        width: 110,
+        height: 110,
+        fit: BoxFit.cover,
         borderRadius: BorderRadius.circular(20),
-        child: Image.file(File(imagePath!),
-            width: 110, height: 110, fit: BoxFit.cover),
       );
     }
     return Container(
@@ -685,7 +731,7 @@ class _CategoryDropdown extends StatelessWidget {
             style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           isExpanded: true,
           dropdownColor: Theme.of(context).colorScheme.surface,
           hint: Text(

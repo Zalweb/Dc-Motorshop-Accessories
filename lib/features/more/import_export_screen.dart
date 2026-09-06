@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -66,20 +63,21 @@ class _ImportExportScreenState extends ConsumerState<ImportExportScreen> {
       // 2. Encrypt
       final encryptedBytes = SecureBackupService.encryptPayload(jsonString, password);
 
-      // 3. Write to temporary file
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${tempDir.path}/dc_backup_$timestamp.bin');
-      await file.writeAsBytes(encryptedBytes);
-
       _hideLoading();
 
-      // 4. Trigger Native Share sheet
+      // 3. Trigger Share sheet directly from bytes (fully platform-safe on Mobile & Web)
       if (mounted) {
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
         final box = context.findRenderObject() as RenderBox?;
         await SharePlus.instance.share(
           ShareParams(
-            files: [XFile(file.path, mimeType: 'application/octet-stream')],
+            files: [
+              XFile.fromData(
+                encryptedBytes,
+                name: 'dc_backup_$timestamp.bin',
+                mimeType: 'application/octet-stream',
+              ),
+            ],
             subject: 'DC Motorshop Backup Data',
             sharePositionOrigin: box != null ? box.localToGlobal(Offset.zero) & box.size : null,
           ),
@@ -102,6 +100,7 @@ class _ImportExportScreenState extends ConsumerState<ImportExportScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        withData: true,
       );
 
       if (result != null && result.files.isNotEmpty) {
@@ -177,7 +176,10 @@ class _ImportExportScreenState extends ConsumerState<ImportExportScreen> {
     _showLoading('Decrypting and restoring data...');
     try {
       final password = _importPasswordController.text;
-      final fileBytes = await File(_selectedFile!.path!).readAsBytes();
+      final fileBytes = _selectedFile!.bytes;
+      if (fileBytes == null) {
+        throw const FormatException('Could not read the selected backup file data.');
+      }
 
       // 1. Decrypt (validates HMAC and password)
       final jsonString = SecureBackupService.decryptPayload(fileBytes, password);
@@ -397,7 +399,7 @@ class _ImportExportScreenState extends ConsumerState<ImportExportScreen> {
                               ),
                               borderRadius: BorderRadius.circular(12),
                               color: _selectedFile != null
-                                  ? primary.withOpacity(0.05)
+                                  ? primary.withValues(alpha: 0.05)
                                   : Colors.transparent,
                             ),
                             child: Row(

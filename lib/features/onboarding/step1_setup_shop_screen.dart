@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,8 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/router/route_paths.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/theme_options.dart';
+import '../../core/utils/image_transparency_helper.dart';
 import '../auth/auth_controller.dart';
 import '../../shared/widgets/glass_container.dart';
+import '../../shared/widgets/shop_logo.dart';
 import 'onboarding_controller.dart';
 import 'widgets/onboarding_scaffold.dart';
 
@@ -20,7 +20,9 @@ class OnboardingSetupShopScreen extends ConsumerWidget {
   Future<void> _pickLogo(WidgetRef ref) async {
     final file = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (file != null) {
-      ref.read(onboardingControllerProvider.notifier).setLogoPath(file.path);
+      final rawBytes = await file.readAsBytes();
+      final dataUrl = await ImageTransparencyHelper.processLogoToDataUrl(rawBytes);
+      ref.read(onboardingControllerProvider.notifier).setLogoPath(dataUrl);
     }
   }
 
@@ -74,7 +76,7 @@ class OnboardingSetupShopScreen extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 13,
                           height: 1.4,
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -107,12 +109,12 @@ class _LogoPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (logoPath != null) {
-      return ClipRRect(
+    if (logoPath != null && logoPath!.isNotEmpty) {
+      return ShopLogo(
+        logoPath: logoPath,
+        size: 90,
         borderRadius: BorderRadius.circular(20),
-        child: logoPath!.startsWith('http')
-            ? Image.network(logoPath!, width: 90, height: 90, fit: BoxFit.cover)
-            : Image.file(File(logoPath!), width: 90, height: 90, fit: BoxFit.cover),
+        fit: BoxFit.contain,
       );
     }
     return Container(
@@ -152,7 +154,7 @@ class _ThemeList extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: kThemeOptions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
           final option = kThemeOptions[i];
           final isSelected = option.name == selected;
@@ -164,7 +166,7 @@ class _ThemeList extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? option.color.withOpacity(0.12) : theme.colorScheme.surfaceContainer,
+                color: isSelected ? option.color.withValues(alpha: 0.12) : theme.colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(
                   color: isSelected ? option.color : theme.colorScheme.outlineVariant,

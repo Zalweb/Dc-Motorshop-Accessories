@@ -1,16 +1,19 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/stock_health.dart';
 import '../../data/models/product.dart';
+import '../../shared/widgets/app_image.dart';
 import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/empty_state.dart';
+import '../../shared/widgets/floating_add_popup.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/tactile_button.dart';
 import 'cart_controller.dart';
 import 'cart_sheet.dart';
 import 'widgets/variant_selector_sheet.dart';
@@ -23,9 +26,18 @@ class NewSaleScreen extends ConsumerStatefulWidget {
 }
 
 class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   String _query = '';
   // null = All; 'service' = services only; otherwise = category name
   String? _categoryFilter;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   List<Product> _apply(List<Product> products) {
     return products.where((p) {
@@ -43,6 +55,56 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
       }
       return true;
     }).toList();
+  }
+
+  void _handleBarcodeSubmitted(String code, List<Product> products) {
+    if (code.trim().isEmpty) return;
+    final trimmed = code.trim().toLowerCase();
+    Product? matched;
+    ProductVariant? matchedVariant;
+
+    for (final p in products) {
+      if ((p.barcode ?? '').toLowerCase() == trimmed) {
+        matched = p;
+        break;
+      }
+      if (p.hasVariants) {
+        for (final v in p.variants) {
+          if ((v.barcode ?? '').toLowerCase() == trimmed ||
+              (v.sku ?? '').toLowerCase() == trimmed) {
+            matched = p;
+            matchedVariant = v;
+            break;
+          }
+        }
+        if (matched != null) break;
+      }
+    }
+
+    if (matched != null) {
+      final allowOversell = ref.read(businessSettingsStreamProvider).value?.allowSellWhenOutOfStock ?? false;
+      if (matchedVariant != null) {
+        if (!matched.isService && matchedVariant.stockQty <= 0 && !allowOversell) {
+          _snack('${matched.name} (${matchedVariant.name}) is out of stock');
+          return;
+        }
+        SystemSound.play(SystemSoundType.click);
+        HapticFeedback.lightImpact();
+        ref.read(cartControllerProvider.notifier).add(matched, variant: matchedVariant);
+        _snack('Added ${matched.name} (${matchedVariant.name})');
+        return;
+      }
+      if (!matched.isService && matched.stockQty <= 0 && !allowOversell) {
+        _snack('${matched.name} is out of stock');
+        return;
+      }
+      SystemSound.play(SystemSoundType.click);
+      HapticFeedback.lightImpact();
+      ref.read(cartControllerProvider.notifier).add(matched);
+      _snack('Added ${matched.name}');
+    } else {
+      _snack('No product found for "$code"');
+    }
   }
 
   Future<void> _scanToAdd(List<Product> products) async {
@@ -86,6 +148,8 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
         _snack('${matchedProduct.name} (${matchedVariant.name}) is out of stock');
         return;
       }
+      SystemSound.play(SystemSoundType.click);
+      HapticFeedback.lightImpact();
       ref.read(cartControllerProvider.notifier).add(matchedProduct, variant: matchedVariant);
       _snack('Added ${matchedProduct.name} (${matchedVariant.name})');
       return;
@@ -109,6 +173,8 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
       _snack('${matchedProduct.name} is out of stock');
       return;
     }
+    SystemSound.play(SystemSoundType.click);
+    HapticFeedback.lightImpact();
     ref.read(cartControllerProvider.notifier).add(matchedProduct);
     _snack('Added ${matchedProduct.name}');
   }
@@ -166,7 +232,24 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
     final productCategories = categories.where((c) => !c.isService).toList();
     final serviceCategories = categories.where((c) => c.isService).toList();
 
-    return Scaffold(
+    final shortcuts = <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.f2): () =>
+          _searchFocusNode.requestFocus(),
+      const SingleActivator(LogicalKeyboardKey.f9): _openCart,
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (_query.isNotEmpty) {
+          _searchController.clear();
+          setState(() => _query = '');
+        }
+        _searchFocusNode.unfocus();
+      },
+    };
+
+    return CallbackShortcuts(
+      bindings: shortcuts,
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       body: SafeArea(
         child: Column(
           children: [
@@ -200,8 +283,11 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: SearchField(
-                hint: 'Search products...',
+                hint: 'Search name, part #, barcode... (F2)',
+                controller: _searchController,
+                focusNode: _searchFocusNode,
                 onChanged: (v) => setState(() => _query = v),
+                onSubmitted: (code) => _handleBarcodeSubmitted(code, products),
                 trailing: IconButton.filled(
                   onPressed: () => _scanToAdd(products),
                   icon: const Icon(Icons.qr_code_scanner, size: 20),
@@ -217,15 +303,17 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
 
             // Dynamic category chips
             SizedBox(
-              height: 40,
+              height: 56, // extra top room for badge overflow
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                clipBehavior: Clip.none, // allow badge above list bounds
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 14),
                 children: [
                   // ALL chip
                   _CategoryChip(
                     label: 'All',
                     selected: _categoryFilter == null,
+                    badgeCount: products.where((p) => !p.isService && p.effectiveStockQty <= criticalStockThreshold).length,
                     onTap: () => setState(() => _categoryFilter = null),
                   ),
                   // Product categories
@@ -233,6 +321,7 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                     _CategoryChip(
                       label: cat.name,
                       selected: _categoryFilter == cat.name,
+                      badgeCount: products.where((p) => p.category == cat.name && !p.isService && p.effectiveStockQty <= criticalStockThreshold).length,
                       onTap: () => setState(() => _categoryFilter = cat.name),
                     ),
                   // Services (if any service categories exist)
@@ -264,6 +353,10 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                       body: 'No products match your search.',
                     );
                   }
+                  final screenWidth = MediaQuery.sizeOf(context).width;
+                  final isWide = screenWidth >= 800;
+                  final crossAxisCount = isWide ? (screenWidth >= 1400 ? 5 : (screenWidth >= 1100 ? 4 : 3)) : 2;
+
                   return GridView.builder(
                     padding: EdgeInsets.fromLTRB(
                       16,
@@ -272,11 +365,11 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                       itemCount > 0 ? 100 : 16,
                     ),
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.68,
+                        SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                      childAspectRatio: 0.72,
                     ),
                     itemCount: filtered.length,
                     itemBuilder: (_, i) {
@@ -332,6 +425,8 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        ),
+      ),
     );
   }
 }
@@ -342,39 +437,78 @@ class _CategoryChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badgeCount,
   });
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final int? badgeCount;
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final hasBadge = badgeCount != null && badgeCount! > 0;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? primary : primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected ? primary : primary.withValues(alpha: 0.25),
-              width: 1.5,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? primary : primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected ? primary : primary.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
+            if (hasBadge)
+              Positioned(
+                top: -6,
+                right: 0,
+                child: Container(
+                  constraints:
+                      const BoxConstraints(minWidth: 19, minHeight: 19),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.danger.withValues(alpha: 0.4),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${badgeCount ?? 0}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -407,11 +541,7 @@ class _FloatingCartBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: Ink(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primary, theme.colorScheme.secondary],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
+              color: primary,
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
@@ -474,7 +604,7 @@ class _FloatingCartBar extends StatelessWidget {
 }
 
 // ─── Product card ─────────────────────────────────────────────────────────────
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   const _ProductCard({
     required this.product,
     required this.quantity,
@@ -492,54 +622,78 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard> {
+  final _popUpController = FloatingAddPopUpController();
+
+  void _handleAdd() {
+    _popUpController.trigger();
+    widget.onAdd?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final stockColor = stockHealth(product.stockQty).color;
-    final inCart = quantity > 0;
+    final stockColor = stockHealth(widget.product.stockQty).color;
+    final inCart = widget.quantity > 0;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: outOfStock
-              ? theme.colorScheme.outlineVariant.withValues(alpha: 0.5)
-              : inCart
-                  ? primary
-                  : theme.colorScheme.outlineVariant,
-          width: inCart && !outOfStock ? 2.0 : 1.0,
+    return FloatingAddPopUp(
+      controller: _popUpController,
+      label: '+1',
+      badgeColor: primary,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: widget.outOfStock
+                ? theme.colorScheme.outlineVariant.withValues(alpha: 0.5)
+                : inCart
+                    ? primary
+                    : theme.colorScheme.outlineVariant,
+            width: inCart && !widget.outOfStock ? 2.0 : 1.0,
+          ),
+          color: widget.outOfStock
+              ? theme.colorScheme.surface.withValues(alpha: 0.6)
+              : theme.colorScheme.surface,
+          boxShadow: inCart && !widget.outOfStock
+              ? [
+                  BoxShadow(
+                    color: primary.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
-        color: outOfStock
-            ? theme.colorScheme.surface.withValues(alpha: 0.6)
-            : theme.colorScheme.surface,
-        boxShadow: inCart && !outOfStock
-            ? [
-                BoxShadow(
-                  color: primary.withValues(alpha: 0.18),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                )
-              ]
-            : [],
-      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(17),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Image area
-            Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.outOfStock
+                ? null
+                : (widget.product.hasVariants
+                    ? widget.onAdd
+                    : (widget.quantity == 0 ? _handleAdd : null)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Image area
+                Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   // Image / placeholder
                   _CardImage(
-                    imagePath: product.imagePath,
-                    outOfStock: outOfStock,
+                    imagePath: widget.product.imagePath,
+                    outOfStock: widget.outOfStock,
                   ),
                   // Cart quantity badge
-                  if (inCart && !outOfStock)
+                  if (inCart && !widget.outOfStock)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -551,7 +705,7 @@ class _ProductCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          'x$quantity',
+                          'x${widget.quantity}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -561,7 +715,7 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                   // Service badge
-                  if (product.isService)
+                  if (widget.product.isService)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -595,33 +749,33 @@ class _ProductCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    product.name,
+                    widget.product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.body.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
-                      color: outOfStock
+                      color: widget.outOfStock
                           ? theme.colorScheme.onSurfaceVariant
                           : theme.colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    product.hasVariants && product.variants.isNotEmpty
-                        ? ((product.minSellingPrice - product.maxSellingPrice).abs() < 0.01
-                            ? formatPeso(product.minSellingPrice)
-                            : '${formatPeso(product.minSellingPrice)} - ${formatPeso(product.maxSellingPrice)}')
-                        : formatPeso(product.sellingPrice),
+                    widget.product.hasVariants && widget.product.variants.isNotEmpty
+                        ? ((widget.product.minSellingPrice - widget.product.maxSellingPrice).abs() < 0.01
+                            ? formatPeso(widget.product.minSellingPrice)
+                            : '${formatPeso(widget.product.minSellingPrice)} - ${formatPeso(widget.product.maxSellingPrice)}')
+                        : formatPeso(widget.product.sellingPrice),
                     style: AppTextStyles.body.copyWith(
                       fontWeight: FontWeight.w900,
-                      color: outOfStock
+                      color: widget.outOfStock
                           ? theme.colorScheme.onSurfaceVariant
                           : primary,
                       fontSize: 13,
                     ),
                   ),
-                  if (!product.isService) ...[
+                  if (!widget.product.isService) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -636,16 +790,16 @@ class _ProductCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            outOfStock
+                            widget.outOfStock
                                 ? 'Out of stock'
-                                : (product.hasVariants && product.variants.isNotEmpty
-                                    ? '${product.effectiveStockQty} in stock (${product.variants.length} opts)'
-                                    : '${product.stockQty} in stock'),
+                                : (widget.product.hasVariants && widget.product.variants.isNotEmpty
+                                    ? '${widget.product.effectiveStockQty} in stock (${widget.product.variants.length} opts)'
+                                    : '${widget.product.stockQty} in stock'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 10,
-                              color: outOfStock
+                              color: widget.outOfStock
                                   ? theme.colorScheme.error
                                   : stockColor,
                               fontWeight: FontWeight.w600,
@@ -656,7 +810,7 @@ class _ProductCard extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  if (outOfStock)
+                  if (widget.outOfStock)
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
@@ -675,71 +829,78 @@ class _ProductCard extends StatelessWidget {
                             style: TextStyle(fontSize: 11)),
                       ),
                     )
-                  else if (product.hasVariants)
+                  else if (widget.product.hasVariants)
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(
-                        onPressed: onAdd,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(36),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.tune_rounded, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              inCart ? 'OPTIONS ($quantity)' : 'SELECT',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                              ),
+                      child: TactileButton(
+                        child: FilledButton(
+                          onPressed: widget.onAdd,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(36),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.tune_rounded, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                inCart ? 'OPTIONS (${widget.quantity})' : 'SELECT',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     )
-                  else if (quantity == 0)
+                  else if (widget.quantity == 0)
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(
-                        onPressed: onAdd,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(36),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                      child: TactileButton(
+                        child: FilledButton(
+                          onPressed: _handleAdd,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(36),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add, size: 16),
-                            SizedBox(width: 4),
-                            Text('ADD',
-                                style:
-                                    TextStyle(fontWeight: FontWeight.w800)),
-                          ],
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add, size: 16),
+                              SizedBox(width: 4),
+                              Text('ADD',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                            ],
+                          ),
                         ),
                       ),
                     )
                   else
                     _CardStepper(
-                      quantity: quantity,
-                      onAdd: atStockLimit ? null : onAdd,
-                      onRemove: onRemove,
-                      atLimit: atStockLimit,
+                      quantity: widget.quantity,
+                      onAdd: widget.atStockLimit ? null : _handleAdd,
+                      onRemove: widget.onRemove,
+                      atLimit: widget.atStockLimit,
                     ),
                 ],
               ),
             ),
           ],
         ),
+          ),
+        ),
       ),
+    ),
     );
   }
 }
@@ -753,23 +914,13 @@ class _CardImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget base;
-
-    if (imagePath != null && File(imagePath!).existsSync()) {
-      base = Image.file(File(imagePath!), fit: BoxFit.cover);
-    } else {
-      base = Container(
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Icon(
-            Icons.inventory_2_outlined,
-            size: 44,
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-        ),
-      );
-    }
+    final Widget base = AppImage(
+      imageUrl: imagePath,
+      imagePath: imagePath,
+      fit: BoxFit.cover,
+      placeholderIcon: Icons.inventory_2_outlined,
+      placeholderIconSize: 44,
+    );
 
     if (!outOfStock) return base;
 

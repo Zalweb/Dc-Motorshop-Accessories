@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +9,9 @@ import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/theme_options.dart';
+import '../../core/utils/image_transparency_helper.dart';
 import '../../shared/widgets/glass_container.dart';
+import '../../shared/widgets/shop_logo.dart';
 
 const _kTimezones = <String>[
   'Asia/Manila (GMT+8)',
@@ -104,7 +105,9 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
   Future<void> _pickLogo() async {
     final file = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (file == null) return;
-    setState(() => _logoPath = file.path);
+    final rawBytes = await file.readAsBytes();
+    final dataUrl = await ImageTransparencyHelper.processLogoToDataUrl(rawBytes);
+    setState(() => _logoPath = dataUrl);
     await _persist();
   }
 
@@ -188,8 +191,8 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
-            iconColor: Color(0xFF8B5CF6),
+          _SectionHeader(
+            iconColor: accent,
             icon: Icons.palette_rounded,
             title: 'Branding',
             subtitle: 'Logo and color theme appear on receipts and the web dashboard.',
@@ -209,24 +212,12 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
                 children: [
                   _DashedBox(
                     color: accent,
-                    child: _logoPath != null
-                        ? ClipRRect(
+                    child: _logoPath != null && _logoPath!.isNotEmpty
+                        ? ShopLogo(
+                            logoPath: _logoPath,
+                            size: 64,
                             borderRadius: BorderRadius.circular(10),
-                            child: _logoPath!.startsWith('http')
-                                ? Image.network(
-                                    _logoPath!,
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Image.file(
-                                    File(_logoPath!),
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) =>
-                                        Icon(Icons.image_outlined, color: accent, size: 28),
-                                  ),
+                            fit: BoxFit.contain,
                           )
                         : Icon(Icons.image_outlined, color: accent, size: 28),
                   ),
@@ -284,24 +275,12 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
             ),
             child: Row(
               children: [
-                _logoPath != null
-                    ? ClipRRect(
+                _logoPath != null && _logoPath!.isNotEmpty
+                    ? ShopLogo(
+                        logoPath: _logoPath,
+                        size: 48,
                         borderRadius: BorderRadius.circular(12),
-                        child: _logoPath!.startsWith('http')
-                            ? Image.network(
-                                _logoPath!,
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                              )
-                            : Image.file(
-                                File(_logoPath!),
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
-                                    _initialAvatar(businessName, selectedOption.color),
-                              ),
+                        fit: BoxFit.contain,
                       )
                     : _initialAvatar(businessName, selectedOption.color),
                 const SizedBox(width: 14),
@@ -351,8 +330,8 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
-            iconColor: Color(0xFF2563EB),
+          _SectionHeader(
+            iconColor: theme.colorScheme.primary,
             icon: Icons.apartment_rounded,
             title: 'Business details',
             subtitle: 'These show on receipts and reports.',
@@ -435,8 +414,8 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
-            iconColor: Color(0xFF8B5CF6),
+          _SectionHeader(
+            iconColor: theme.colorScheme.primary,
             icon: Icons.qr_code_rounded,
             title: 'Receipts',
             subtitle: 'Add a QR to every printed receipt so customers can scan to find you online.',

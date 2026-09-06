@@ -180,8 +180,35 @@ class _CategoryTile extends StatelessWidget {
                       fontWeight: FontWeight.w700)),
             ),
           IconButton(
-            onPressed: () =>
-                ref.read(categoryRepositoryProvider).delete(category.id),
+            tooltip: 'Delete category',
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete Category?'),
+                  content: Text(
+                    'Are you sure you want to delete "${category.name}"? '
+                    'Products in this category will become uncategorized.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.error,
+                      ),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await ref.read(categoryRepositoryProvider).delete(category.uid);
+              }
+            },
             icon: Icon(Icons.close, color: theme.colorScheme.onSurfaceVariant),
           ),
         ],

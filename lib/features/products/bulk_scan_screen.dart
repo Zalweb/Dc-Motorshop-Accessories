@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../core/router/route_paths.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/utils/security_sanitizer.dart';
 import '../../data/models/product.dart';
 import 'add_product_screen.dart';
 import 'bulk_queue_item.dart';
@@ -55,8 +56,10 @@ class _BulkScanScreenState extends ConsumerState<BulkScanScreen> {
 
   void _onDetect(BarcodeCapture capture) {
     if (_busy) return;
-    final value = capture.barcodes.firstOrNull?.rawValue;
-    if (value == null || value.isEmpty) return;
+    final rawValue = capture.barcodes.firstOrNull?.rawValue;
+    if (rawValue == null) return;
+    final value = sanitizeBarcode(rawValue);
+    if (value.isEmpty) return;
     _handle(value);
   }
 
@@ -179,7 +182,49 @@ class _BulkScanScreenState extends ConsumerState<BulkScanScreen> {
         body: Stack(
           alignment: Alignment.center,
           children: [
-            MobileScanner(controller: _controller, onDetect: _onDetect),
+            MobileScanner(
+              controller: _controller,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 56, color: Colors.amber),
+                        const SizedBox(height: 16),
+                        Text(
+                          error.errorCode == MobileScannerErrorCode.permissionDenied
+                              ? 'Camera permission denied'
+                              : 'Could not start camera scanner',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          error.errorDetails?.message ??
+                              'Please check camera permission in app settings and try again.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.tonal(
+                          onPressed: () => _controller.start(),
+                          child: const Text('Try Again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             Container(
               width: 240,
               height: 160,

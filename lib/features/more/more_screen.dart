@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,8 +9,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/motion_controller.dart';
 import '../../core/theme/theme_mode_controller.dart';
-import '../../shared/widgets/brand_mark.dart';
 import '../../shared/widgets/glass_container.dart';
+import '../../shared/widgets/shop_logo.dart';
 import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../expenses/expenses_screen.dart';
@@ -35,45 +33,37 @@ class MoreScreen extends ConsumerWidget {
     final primary = theme.colorScheme.primary;
     final themeMode = ref.watch(themeModeProvider);
     final motionEnabled = ref.watch(motionEnabledProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isWide = screenWidth >= 800;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('More')),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        children: [
+      appBar: AppBar(title: const Text('More & Settings')),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: isWide ? 900 : double.infinity),
+          child: ListView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 32 : 20,
+              vertical: isWide ? 24 : 16,
+            ),
+            children: [
           // Redesigned Profile Header Banner
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primary.withValues(alpha: 0.12), theme.colorScheme.surfaceContainer],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: theme.colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
             child: Row(
               children: [
-                settings?.logoPath != null && settings!.logoPath!.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: settings.logoPath!.startsWith('http')
-                            ? Image.network(
-                                settings.logoPath!,
-                                width: 56,
-                                height: 56,
-                                fit: BoxFit.cover,
-                              )
-                            : Image.file(
-                                File(settings.logoPath!),
-                                width: 56,
-                                height: 56,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const BrandMark(size: 56),
-                              ),
-                      )
-                    : const BrandMark(size: 56),
+                ShopLogo(
+                  logoPath: settings?.logoPath,
+                  size: 56,
+                  borderRadius: BorderRadius.circular(16),
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -408,7 +398,7 @@ class MoreScreen extends ConsumerWidget {
           const SizedBox(height: 28),
 
           Text(
-            'ADVANCE',
+            'ADVANCED',
             style: AppTextStyles.labelCaps.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
@@ -419,7 +409,7 @@ class MoreScreen extends ConsumerWidget {
               data: theme.copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 leading: Icon(Icons.admin_panel_settings_outlined, color: primary),
-                title: Text('Advance account options', style: AppTextStyles.body),
+                title: Text('Advanced account options', style: AppTextStyles.body),
                 subtitle: Text(
                   'Reset or delete your local data',
                   style: AppTextStyles.bodySmall
@@ -480,7 +470,9 @@ class MoreScreen extends ConsumerWidget {
           const SizedBox(height: 24),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }
 
@@ -734,17 +726,6 @@ class _BusinessCard extends StatelessWidget {
   final String? qrLink;
   final String? logoPath;
 
-  Widget _buildDefaultIcon(Color primary) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: primary.withValues(alpha: 0.12),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(Icons.two_wheeler_rounded, color: primary, size: 24),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -765,25 +746,12 @@ class _BusinessCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              logoPath != null && logoPath!.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: logoPath!.startsWith('http')
-                          ? Image.network(
-                              logoPath!,
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.file(
-                              File(logoPath!),
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => _buildDefaultIcon(primary),
-                            ),
-                    )
-                  : _buildDefaultIcon(primary),
+              ShopLogo(
+                logoPath: logoPath,
+                size: 40,
+                borderRadius: BorderRadius.circular(12),
+                fit: BoxFit.contain,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'core/db/isar_service.dart';
+import 'core/bootstrap/bootstrap.dart' as boot;
 import 'core/providers.dart';
 import 'core/router/app_router.dart';
 import 'core/supabase/supabase_service.dart';
@@ -17,21 +16,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Supabase before anything else — this sets up the auth client
-  // and restores any persisted session from secure storage automatically.
+  // and restores any persisted session automatically (secure storage on
+  // native, shared_preferences on web via supabase_flutter).
   await SupabaseService.initialize();
 
-  final isarService = await IsarService.open();
-  final prefs = await SharedPreferences.getInstance();
-
-  runApp(
-    ProviderScope(
-      overrides: [
-        isarServiceProvider.overrideWithValue(isarService),
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
-      child: const DcMotorcycleInventoryApp(),
-    ),
-  );
+  // Platform-specific boot: native opens Isar; web is cloud-only (no Isar).
+  await boot.runWithOverrides(const DcMotorcycleInventoryApp());
 }
 
 class DcMotorcycleInventoryApp extends ConsumerWidget {
@@ -43,7 +33,7 @@ class DcMotorcycleInventoryApp extends ConsumerWidget {
     // Keep the connectivity-triggered sync subscription alive for the app's lifetime.
     ref.watch(connectivitySyncProvider);
     final settingsVal = ref.watch(businessSettingsStreamProvider);
-    
+
     final settings = settingsVal.value;
     final themeColorName = settings?.themeColor ?? 'Blue';
 
@@ -54,7 +44,6 @@ class DcMotorcycleInventoryApp extends ConsumerWidget {
 
     final motionEnabled = ref.watch(motionEnabledProvider);
 
-    // Motion on → animated slide+fade page transitions app-wide; off → instant.
     final pageTransitions =
         motionEnabled ? kMotionPageTransitionsTheme : kNoMotionPageTransitionsTheme;
     final lightTheme = AppTheme.lightTheme(colorOption.color)
@@ -69,7 +58,6 @@ class DcMotorcycleInventoryApp extends ConsumerWidget {
       darkTheme: darkTheme,
       themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
-      // Honors "Motion off" for animations that respect the accessibility flag.
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(disableAnimations: !motionEnabled),
         child: child!,
@@ -77,4 +65,3 @@ class DcMotorcycleInventoryApp extends ConsumerWidget {
     );
   }
 }
-

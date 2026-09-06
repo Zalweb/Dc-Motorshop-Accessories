@@ -33,3 +33,18 @@ key.properties
 supabase/.temp/
 supabase/.branch/
 *.apk
+
+# Local artifacts & tool scripts
+STOCKS/
+STOCKS_CROPS/
+STOCKS_ROTATED/
+web-react-backup/
+l0_*.md
+.agents/
+tool/*.png
+tool/*.jpg
+tool/*.json
+tool/*.py
+tool/__pycache__/
+tool/subagent*
+tool/unsure_crops/

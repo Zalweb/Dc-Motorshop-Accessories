@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:excel/excel.dart' as xls;
@@ -6,10 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/providers.dart';
+import '../../core/utils/security_sanitizer.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sale.dart';
 
@@ -88,14 +87,12 @@ Future<void> exportSalesToExcel(
           content: Text(path == null ? 'Save cancelled.' : 'Saved to device.'),
         ));
       case _ExportAction.share:
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/${built.fileName}');
-        await file.writeAsBytes(built.bytes);
         await SharePlus.instance.share(
           ShareParams(
             files: [
-              XFile(
-                file.path,
+              XFile.fromData(
+                built.bytes,
+                name: built.fileName,
                 mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
               ),
             ],
@@ -143,9 +140,9 @@ Future<_Workbook?> _buildWorkbook(WidgetRef ref, List<Sale> sales) async {
           byName[item.name.toLowerCase()];
       sheet.appendRow([
         xls.IntCellValue(item.quantity),
-        xls.TextCellValue(item.name),
-        xls.TextCellValue(product?.brand ?? ''),
-        xls.TextCellValue(product?.partNumber ?? ''),
+        xls.TextCellValue(sanitizeForSpreadsheet(item.name)),
+        xls.TextCellValue(sanitizeForSpreadsheet(product?.brand ?? '')),
+        xls.TextCellValue(sanitizeForSpreadsheet(product?.partNumber ?? '')),
         xls.DoubleCellValue(item.unitPrice),
         xls.TextCellValue(_statusLabel(sale.status)),
         xls.TextCellValue(dateFormat.format(sale.createdAt)),

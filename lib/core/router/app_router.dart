@@ -23,6 +23,7 @@ import '../../features/sales/new_sale_screen.dart';
 import '../../features/sales/sales_history_screen.dart';
 import '../../features/shell/main_shell.dart';
 import '../../features/splash/splash_screen.dart';
+import 'page_transitions.dart';
 import 'route_paths.dart';
 
 /// App router with the auth guard and the 5-tab bottom-nav shell.
@@ -62,66 +63,125 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
     routes: [
-      GoRoute(path: RoutePaths.splash, builder: (_, _) => const SplashScreen()),
-      GoRoute(path: RoutePaths.login, builder: (_, _) => const LoginScreen()),
       GoRoute(
-          path: RoutePaths.register,
-          builder: (_, _) => const LoginScreen(initialTab: AuthTab.register)),
+        path: RoutePaths.splash,
+        builder: (_, _) => const SplashScreen(),
+      ),
       GoRoute(
-          path: RoutePaths.forgotPassword,
-          builder: (_, _) => const ForgotPasswordScreen()),
+        path: RoutePaths.login,
+        pageBuilder: (_, state) => AppPageTransitions.fadeThroughTransition(
+          state: state,
+          child: const LoginScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.otpVerify,
-          builder: (_, state) =>
-              OtpVerifyScreen(email: state.extra as String)),
+        path: RoutePaths.register,
+        pageBuilder: (_, state) => AppPageTransitions.fadeThroughTransition(
+          state: state,
+          child: const LoginScreen(initialTab: AuthTab.register),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.forgotPassword,
+        pageBuilder: (_, state) => AppPageTransitions.fadeThroughTransition(
+          state: state,
+          child: const ForgotPasswordScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.otpVerify,
+        pageBuilder: (_, state) => AppPageTransitions.fadeThroughTransition(
+          state: state,
+          child: OtpVerifyScreen(email: (state.extra as String?) ?? ''),
+        ),
+      ),
       GoRoute(
         path: RoutePaths.resetPassword,
-        builder: (_, state) {
-          final data = state.extra as Map<String, dynamic>;
-          return ResetPasswordScreen(
-            email: data['email'] as String,
-            otp: data['otp'] as String,
+        pageBuilder: (_, state) {
+          final data = state.extra as Map<String, dynamic>?;
+          return AppPageTransitions.fadeThroughTransition(
+            state: state,
+            child: ResetPasswordScreen(
+              email: (data?['email'] as String?) ?? '',
+              otp: (data?['otp'] as String?) ?? '',
+            ),
           );
         },
       ),
 
-      // Onboarding flow.
+      // Onboarding flow (smooth slide transitions).
       GoRoute(
-          path: RoutePaths.onboardingStep1,
-          builder: (_, _) => const OnboardingSetupShopScreen()),
+        path: RoutePaths.onboardingStep1,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const OnboardingSetupShopScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.onboardingStep2,
-          builder: (_, _) => const OnboardingReviewSetupScreen()),
+        path: RoutePaths.onboardingStep2,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const OnboardingReviewSetupScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.onboardingStep3,
-          builder: (_, _) => const OnboardingInviteStaffScreen()),
+        path: RoutePaths.onboardingStep3,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const OnboardingInviteStaffScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.onboardingComplete,
-          builder: (_, _) => const OnboardingCompleteScreen()),
+        path: RoutePaths.onboardingComplete,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const OnboardingCompleteScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.setupChecklist,
-          builder: (_, _) => const SetupChecklistScreen()),
+        path: RoutePaths.setupChecklist,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const SetupChecklistScreen(),
+        ),
+      ),
 
-      // Product sub-screens (cover the bottom nav).
+      // Product sub-screens (smooth modal slide & slide transitions).
       GoRoute(
-          path: RoutePaths.addProduct,
-          builder: (_, state) {
-            final args = state.extra as AddProductArgs?;
-            return AddProductScreen(
+        path: RoutePaths.addProduct,
+        pageBuilder: (_, state) {
+          final args = state.extra as AddProductArgs?;
+          return AppPageTransitions.modalSlideTransition(
+            state: state,
+            child: AddProductScreen(
               initialBarcode: args?.initialBarcode,
               stage: args?.stage ?? false,
               editProduct: args?.editProduct,
-            );
-          }),
+            ),
+          );
+        },
+      ),
       GoRoute(
-          path: RoutePaths.productDetail,
-          builder: (_, state) =>
-              ProductDetailScreen(productId: state.extra as int)),
+        path: RoutePaths.productDetail,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: ProductDetailScreen(productId: (state.extra as int?) ?? 0),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.bulkAdd, builder: (_, _) => const BulkAddScreen()),
+        path: RoutePaths.bulkAdd,
+        pageBuilder: (_, state) => AppPageTransitions.modalSlideTransition(
+          state: state,
+          child: const BulkAddScreen(),
+        ),
+      ),
       GoRoute(
-          path: RoutePaths.categories,
-          builder: (_, _) => const CategoriesScreen()),
+        path: RoutePaths.categories,
+        pageBuilder: (_, state) => AppPageTransitions.slideTransition(
+          state: state,
+          child: const CategoriesScreen(),
+        ),
+      ),
 
       // Main app shell with the 5 bottom-nav tabs.
       StatefulShellRoute.indexedStack(

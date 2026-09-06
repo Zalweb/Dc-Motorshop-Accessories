@@ -126,7 +126,7 @@ class _SummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: primary.withOpacity(0.12),
+              color: primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.two_wheeler, color: primary, size: 28),
@@ -188,7 +188,7 @@ class _AddRow extends StatelessWidget {
           child: FilledButton.tonal(
             onPressed: onAdd,
             style: FilledButton.styleFrom(
-              backgroundColor: primary.withOpacity(0.15),
+              backgroundColor: primary.withValues(alpha: 0.15),
               foregroundColor: primary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

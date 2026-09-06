@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:iconoir_flutter/iconoir_flutter.dart' hide Text, List;
+import 'app_pressable.dart';
 import 'glass_container.dart';
 
 class BottomNavSpec {
@@ -79,23 +80,25 @@ class _NavItem extends StatelessWidget {
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            spec.iconBuilder(color),
-            const SizedBox(height: 4),
-            Text(
-              spec.label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      child: AppPressable(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              spec.iconBuilder(color),
+              const SizedBox(height: 4),
+              Text(
+                spec.label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -113,7 +116,7 @@ class _CenterFab extends StatelessWidget {
     final primary = theme.colorScheme.primary;
     return Expanded(
       child: Center(
-        child: GestureDetector(
+        child: AppPressable(
           onTap: onTap,
           child: Container(
             width: 56,

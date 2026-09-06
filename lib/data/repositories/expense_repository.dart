@@ -22,6 +22,6 @@ class ExpenseRepository {
     return _isar.writeTxn(() => _isar.expenses.put(expense));
   }
 
-  Future<void> delete(int id) =>
-      _isar.writeTxn(() => _isar.expenses.delete(id));
+  Future<void> delete(String uid) =>
+      _isar.expenses.filter().uidEqualTo(uid).deleteAll();
 }

@@ -15,7 +15,8 @@ class ProductRepository {
   Future<List<Product>> all() =>
       _isar.products.where().sortByCreatedAtDesc().findAll();
 
-  Future<Product?> byId(int id) => _isar.products.get(id);
+  Future<Product?> byId(String uid) =>
+      _isar.products.filter().uidEqualTo(uid).findFirst();
 
   Future<Product?> findByBarcode(String code) async {
     final clean = code.trim();
@@ -49,12 +50,13 @@ class ProductRepository {
     return _isar.writeTxn(() => _isar.products.put(product));
   }
 
-  Future<void> delete(int id) =>
-      _isar.writeTxn(() => _isar.products.delete(id));
+  Future<void> delete(String uid) =>
+      _isar.products.filter().uidEqualTo(uid).deleteAll();
 
   /// Reduces stock for a sold product or specific variant (no-op for services).
-  Future<void> decrementStock(int productId, int qty, {String? variantUid}) async {
-    final product = await _isar.products.get(productId);
+  Future<void> decrementStock(
+      String productUid, int qty, {String? variantUid}) async {
+    final product = await _isar.products.filter().uidEqualTo(productUid).findFirst();
     if (product == null || product.isService) return;
     if (product.hasVariants && variantUid != null) {
       final updated = <ProductVariant>[];

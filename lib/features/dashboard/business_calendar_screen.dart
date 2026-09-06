@@ -205,7 +205,7 @@ class _BusinessCalendarScreenState extends ConsumerState<BusinessCalendarScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, color: AppColors.accent, size: 20),
+          Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text.rich(

@@ -123,12 +123,12 @@ class CartController extends Notifier<List<CartLine>> {
 
   double get total => state.fold(0, (sum, l) => sum + l.lineTotal);
 
-  /// Persists the cart as a Sale, decrements stock, logs inventory transactions, and clears cart.
   Future<Sale> checkout({
     String? customerName,
     String status = 'paid',
     String paymentMethod = 'cash',
     double amountReceived = 0,
+    double discount = 0,
     String? notes,
     DateTime? date,
   }) async {
@@ -142,7 +142,7 @@ class CartController extends Notifier<List<CartLine>> {
       final shortItems = <String>[];
       for (final line in state) {
         if (line.isService) continue;
-        final product = await productRepo.byId(line.productId);
+        final product = await productRepo.byId(line.productUid);
         if (product != null) {
           if (product.hasVariants && line.variantUid != null) {
             final variant = product.variants
@@ -158,6 +158,9 @@ class CartController extends Notifier<List<CartLine>> {
       }
       if (shortItems.isNotEmpty) throw OutOfStockException(shortItems);
     }
+
+    final safeDiscount = discount.clamp(0, total).toDouble();
+    final finalTotal = (total - safeDiscount).clamp(0.0, double.infinity);
 
     final sale = Sale()
       ..saleNumber = await saleRepo.nextSaleNumber()
@@ -176,8 +179,8 @@ class CartController extends Notifier<List<CartLine>> {
             ..sku = l.sku)
           .toList()
       ..subtotal = total
-      ..discount = 0
-      ..total = total
+      ..discount = safeDiscount
+      ..total = finalTotal
       ..status = status
       ..paymentMethod = paymentMethod
       ..amountReceived = amountReceived
@@ -192,7 +195,7 @@ class CartController extends Notifier<List<CartLine>> {
       if (line.isService) continue;
 
       await productRepo.decrementStock(
-        line.productId,
+        line.productUid,
         line.quantity,
         variantUid: line.variantUid,
       );

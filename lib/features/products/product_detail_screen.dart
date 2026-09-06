@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +8,11 @@ import '../../core/router/route_paths.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
+import '../../core/utils/stock_health.dart';
 import '../../data/models/product.dart';
+import '../../shared/widgets/app_image.dart';
 import '../../shared/widgets/glass_container.dart';
 import 'add_product_screen.dart';
-import '../../core/utils/stock_health.dart';
 
 import 'manage_variants_screen.dart';
 import 'widgets/variant_builder_widget.dart';
@@ -78,6 +77,40 @@ class ProductDetailScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _deleteProduct(BuildContext context, WidgetRef ref, Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Product?'),
+        content: Text(
+          'Are you sure you want to delete "${product.name}"? '
+          'This will remove it from the catalog and cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await ref.read(productRepositoryProvider).delete(product.uid);
+      if (context.mounted) {
+        context.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "${product.name}"')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final products = ref.watch(productListStreamProvider).value ?? [];
@@ -101,6 +134,11 @@ class ProductDetailScreen extends ConsumerWidget {
               RoutePaths.addProduct,
               extra: AddProductArgs(editProduct: product),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+            tooltip: 'Delete Product',
+            onPressed: () => _deleteProduct(context, ref, product),
           ),
         ],
       ),
@@ -138,7 +176,10 @@ class _Header extends StatelessWidget {
 
     return Column(
       children: [
-        _ProductImage(imagePath: product.imagePath),
+        _ProductImage(
+          imageUrl: product.imageUrl,
+          imagePath: product.imagePath,
+        ),
         const SizedBox(height: 16),
         Text(
           product.name,
@@ -160,34 +201,22 @@ class _Header extends StatelessWidget {
 }
 
 class _ProductImage extends StatelessWidget {
-  const _ProductImage({required this.imagePath});
+  const _ProductImage({this.imageUrl, this.imagePath});
 
+  final String? imageUrl;
   final String? imagePath;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (imagePath != null && File(imagePath!).existsSync()) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Image.file(File(imagePath!),
-            width: 160, height: 160, fit: BoxFit.cover),
-      );
-    }
-    return Container(
+    return AppImage(
+      imageUrl: imageUrl,
+      imagePath: imagePath,
       width: 160,
       height: 160,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Icon(
-        Icons.inventory_2_outlined,
-        size: 56,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+      borderRadius: BorderRadius.circular(24),
+      fit: BoxFit.cover,
+      placeholderIcon: Icons.inventory_2_outlined,
+      placeholderIconSize: 56,
     );
   }
 }

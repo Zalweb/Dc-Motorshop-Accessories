@@ -10,6 +10,18 @@ Build **DC Motorcycle Inventory** — a Flutter mobile POS + inventory app for a
 
 ---
 
+## MANDATORY RULE: 100% Mobile & Web Synchronization & Parity
+> **CRITICAL DIRECTIVE FOR ALL AGENTS & AI INTERACTIONS:**
+> **Mobile and Web MUST be kept in 100% synchronization at all times.**
+> Whenever any file is edited, modified, or added, the changes MUST maintain 100% functional, visual, and operational parity across both Mobile and Web platforms:
+> 1. **Zero Feature Drift**: Every feature on mobile must exist on web, and every feature on web must exist on mobile.
+> 2. **Model & State Parity**: Any changes to `*_native.dart` models or `providers_native.dart` must immediately be mirrored in `*_web.dart` models and `providers_web.dart`.
+> 3. **Web-Safe Coding**: Never use raw `dart:io` or `File` in shared UI code. Use `AppImage` (`lib/shared/widgets/app_image.dart`) and cross-platform conditional compilation.
+> 4. **Adaptive UI**: Mobile uses bottom navigation and modal cart; Web/Desktop uses sidebar navigation and split-screen POS with persistent cart. Both share identical state controllers.
+> 5. **Testing Verification**: Always verify both Web and native compilation before completing any task.
+
+---
+
 ## Design System
 
 ### Colors

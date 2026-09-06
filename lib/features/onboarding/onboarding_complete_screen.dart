@@ -33,19 +33,10 @@ class _OnboardingCompleteScreenState
     return Scaffold(
       body: Stack(
         children: [
-          // Background soft radial gradient
+          // Solid background (matches mobile minimal theme)
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.center,
-                  radius: 1.2,
-                  colors: [
-                    primary.withOpacity(0.08),
-                    theme.scaffoldBackgroundColor,
-                  ],
-                ),
-              ),
+              color: theme.scaffoldBackgroundColor,
             ),
           ),
           SafeArea(
@@ -61,16 +52,16 @@ class _OnboardingCompleteScreenState
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: primary.withOpacity(0.05),
+                        color: primary.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                       ),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: primary.withOpacity(0.1),
+                          color: primary.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: primary.withOpacity(0.3),
+                            color: primary.withValues(alpha: 0.3),
                             width: 2,
                           ),
                         ),
@@ -122,7 +113,7 @@ class _OnboardingCompleteScreenState
                   Text(
                     'You can update settings anytime',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(height: 16),

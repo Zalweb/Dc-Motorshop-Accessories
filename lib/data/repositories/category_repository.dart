@@ -24,8 +24,8 @@ class CategoryRepository {
     await _isar.writeTxn(() => _isar.categorys.put(category));
   }
 
-  Future<void> delete(int id) =>
-      _isar.writeTxn(() => _isar.categorys.delete(id));
+  Future<void> delete(String uid) =>
+      _isar.categorys.filter().uidEqualTo(uid).deleteAll();
 
   /// Creates any of [names] that don't already exist (used after onboarding).
   Future<void> seed(List<String> names) async {

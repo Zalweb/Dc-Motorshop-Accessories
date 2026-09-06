@@ -214,6 +214,23 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                         : 'New sales will show up here.',
                   );
                 }
+                final screenWidth = MediaQuery.sizeOf(context).width;
+                final isWide = screenWidth >= 800;
+
+                if (isWide) {
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: screenWidth >= 1300 ? 3 : 2,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                      childAspectRatio: 2.8,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) => _SaleTile(sale: filtered[i]),
+                  );
+                }
+
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: filtered.length,
@@ -243,9 +260,9 @@ class _SaleTile extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4)),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.22)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(

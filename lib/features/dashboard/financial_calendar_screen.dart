@@ -51,7 +51,9 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
 
     // Watch sales and expenses
     final includeUnpaid = ref
@@ -141,8 +143,8 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
                 label: 'REVENUE',
                 value: _formatCompact(revenue),
                 subtext: '$operatingDays operating days',
-                chipColor: const Color(0xFF4ADE80),
-                valueColor: const Color(0xFF4ADE80),
+                chipColor: primary,
+                valueColor: primary,
                 isDark: isDark,
               ),
               // Gross Profit
@@ -150,8 +152,8 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
                 label: 'GROSS PROFIT',
                 value: _formatCompact(grossProfit),
                 subtext: '${margin.toStringAsFixed(1)}% margin',
-                chipColor: const Color(0xFF38BDF8),
-                valueColor: const Color(0xFF38BDF8),
+                chipColor: primary,
+                valueColor: primary,
                 isDark: isDark,
               ),
               // Net Profit
@@ -159,8 +161,8 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
                 label: 'NET PROFIT',
                 value: _formatCompact(netProfit),
                 subtext: netProfit > 0 ? 'Profitable' : (netProfit < 0 ? 'Loss' : 'Breakeven'),
-                chipColor: const Color(0xFFA78BFA),
-                valueColor: const Color(0xFFA78BFA),
+                chipColor: primary,
+                valueColor: primary,
                 isDark: isDark,
               ),
               // Total Sales
@@ -168,8 +170,8 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
                 label: 'TOTAL SALES',
                 value: '${monthSales.length}',
                 subtext: '${salesPerDay.toStringAsFixed(1)}/day',
-                chipColor: const Color(0xFFF59E0B),
-                valueColor: const Color(0xFFF59E0B),
+                chipColor: primary,
+                valueColor: primary,
                 isDark: isDark,
               ),
             ],
@@ -431,7 +433,7 @@ class _FinancialCalendarScreenState extends ConsumerState<FinancialCalendarScree
           GlassContainer(
             borderRadius: BorderRadius.circular(16),
             child: ListTile(
-              leading: const Icon(Icons.calendar_today, color: Color(0xFF4ADE80)),
+              leading: Icon(Icons.calendar_today, color: primary),
               title: const Text('Mark closed days in Business Calendar'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {

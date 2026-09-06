@@ -70,7 +70,7 @@ class _InventorySettingsView extends ConsumerWidget {
         children: [
           _SettingsSection(
             icon: Icons.inventory_2_outlined,
-            iconColor: const Color(0xFF10B981),
+            iconColor: theme.colorScheme.primary,
             title: 'Selling & stock',
             subtitle: 'How sales interact with your stock counts.',
             tiles: [
@@ -85,7 +85,7 @@ class _InventorySettingsView extends ConsumerWidget {
               _ToggleTile(
                 title: 'Track partial change given',
                 leadingIcon: Icons.toll_outlined,
-                leadingColor: const Color(0xFFF59E0B),
+                leadingColor: theme.colorScheme.primary,
                 description:
                     "If you sometimes give less change than owed, record what's still owed so you can settle later.",
                 value: settings.trackPartialChange,

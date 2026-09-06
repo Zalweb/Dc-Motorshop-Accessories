@@ -69,6 +69,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return null;
   }
 
+  String? _loginIdentifierValidator(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Required';
+    if (v.contains('@') && !v.contains('.')) return 'Invalid email';
+    return null;
+  }
+
   Future<void> _submit() async {
     if (_activeTab == AuthTab.login) {
       if (!_loginFormKey.currentState!.validate()) return;
@@ -81,17 +87,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // Handle Remember Me
     final prefs = await SharedPreferences.getInstance();
     if (_activeTab == AuthTab.login) {
+      final cleanQuery = _email.text.trim();
       if (_rememberMe) {
-        await prefs.setString('remember_me_email', _email.text);
+        await prefs.setString('remember_me_email', cleanQuery);
       } else {
         await prefs.remove('remember_me_email');
       }
-      await controller.login(_email.text, _password.text);
+      await controller.login(cleanQuery, _password.text);
     } else {
       await controller.register(
-        email: _email.text,
+        email: _email.text.trim().toLowerCase(),
         password: _password.text,
-        username: _username.text,
+        username: _username.text.trim(),
       );
     }
   }
@@ -119,7 +126,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // Theme-aware colors
     final bgColor = theme.scaffoldBackgroundColor;
     final curveColor = theme.colorScheme.surfaceContainer;
-    final textColor = theme.colorScheme.onSurface;
     final pillBgColor = isDark ? const Color(0xFF333333) : const Color(0xFFE5E7EB);
     final tabActiveBg = isDark ? const Color(0xFFE0E0E0) : Colors.white;
     final tabActiveText = isDark ? const Color(0xFF222224) : Colors.black;
@@ -165,29 +171,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 clipper: _BottomCurveClipper(),
                 child: Container(
                   color: curveColor,
-                  alignment: Alignment.bottomRight,
-                  padding: const EdgeInsets.only(right: 24, bottom: 24),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Remember me',
-                        style: AppTextStyles.body.copyWith(
-                          color: textColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Switch(
-                        value: _rememberMe,
-                        onChanged: (v) => setState(() => _rememberMe = v),
-                        activeThumbColor: theme.colorScheme.primary,
-                        activeTrackColor: theme.colorScheme.primary.withOpacity(0.5),
-                        inactiveThumbColor: isDark ? Colors.white : Colors.grey.shade400,
-                        inactiveTrackColor: isDark ? const Color(0xFF555555) : const Color(0xFFDCDCDC),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -251,11 +234,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
         _buildField(
-          label: 'Email',
+          label: 'Email or Username',
           controller: _email,
           icon: const iconoir.Mail(width: 20, height: 20),
           keyboardType: TextInputType.emailAddress,
-          validator: _emailValidator,
+          validator: _loginIdentifierValidator,
         ),
         const SizedBox(height: 20),
         _buildField(
@@ -266,28 +249,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               size: 20,
             ),
             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
           ),
           validator: (v) => (v == null || v.length < 8) ? 'At least 8 chars' : null,
         ),
-        const SizedBox(height: 40),
-        _buildSubmitButton('Login', theme, isDark, isLoading),
-        const SizedBox(height: 16),
-        Center(
-          child: TextButton(
-            onPressed: () => context.push('/forgot-password'),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.primary,
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _rememberMe = !_rememberMe),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: Checkbox(
+                        value: _rememberMe,
+                        onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        activeColor: theme.colorScheme.primary,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Remember me',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: const Text(
-              'Forgot Password?',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            TextButton(
+              onPressed: () => context.push('/forgot-password'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Forgot Password?',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
             ),
-          ),
+          ],
         ),
+        const SizedBox(height: 28),
+        _buildSubmitButton('Login', theme, isDark, isLoading),
         const SizedBox(height: 80),
       ],
       ),
@@ -324,7 +346,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               size: 20,
             ),
             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -340,7 +362,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           suffixIcon: IconButton(
             icon: Icon(
               _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               size: 20,
             ),
             onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -390,7 +412,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: 4,
-          shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+          shadowColor: theme.colorScheme.primary.withValues(alpha: 0.4),
         ),
         child: isLoading
             ? SizedBox(
@@ -449,8 +471,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final textColor = theme.colorScheme.onSurface;
     
     // Luxury Input Design
-    final fillColor = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02);
-    final borderColor = isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06);
+    final fillColor = isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.02);
+    final borderColor = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,7 +482,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Text(
             label,
             style: AppTextStyles.body.copyWith(
-              color: textColor.withOpacity(0.8),
+              color: textColor.withValues(alpha: 0.8),
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -480,7 +502,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             prefixIcon: icon != null ? Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: IconTheme(
-                data: IconThemeData(color: textColor.withOpacity(0.5)),
+                data: IconThemeData(color: textColor.withValues(alpha: 0.5)),
                 child: icon,
               ),
             ) : null,

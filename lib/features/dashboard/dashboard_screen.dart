@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,11 +7,14 @@ import '../../core/router/route_paths.dart';
 import '../../core/supabase/supabase_providers.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
-import '../../shared/widgets/brand_mark.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/metric_card.dart';
+import '../../shared/widgets/shop_logo.dart';
+import '../../shared/widgets/staggered_entrance.dart';
 import 'dashboard_controller.dart';
+import 'widgets/desktop_dashboard_view.dart';
 import '../expenses/expenses_screen.dart';
+import '../products/products_screen.dart';
 import 'reports_screen.dart';
 import 'package:iconoir_flutter/iconoir_flutter.dart' hide Text, Navigator, List;
 
@@ -66,6 +67,34 @@ class DashboardScreen extends ConsumerWidget {
     final checklistComplete = doneCount >= totalItems;
     final progress = doneCount / totalItems;
 
+    final isWide = MediaQuery.sizeOf(context).width >= 800;
+    if (isWide) {
+      return Scaffold(
+        body: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              try {
+                await ref.read(supabaseSyncServiceProvider).syncNow();
+                final prefs = ref.read(sharedPreferencesProvider);
+                final dates = prefs.getStringList('calendar_closed_dates') ?? [];
+                ref.read(calendarClosedDatesProvider.notifier).set(dates);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Sync failed: $e')),
+                  );
+                }
+              }
+            },
+            child: DesktopDashboardView(
+              summary: summary,
+              period: period,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -89,26 +118,12 @@ class DashboardScreen extends ConsumerWidget {
               // Header
             Row(
               children: [
-                settings?.logoPath != null && settings!.logoPath!.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: settings.logoPath!.startsWith('http')
-                            ? Image.network(
-                                settings.logoPath!,
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const BrandMark(size: 40),
-                              )
-                            : Image.file(
-                                File(settings.logoPath!),
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const BrandMark(size: 40),
-                              ),
-                      )
-                    : const BrandMark(size: 40),
+                ShopLogo(
+                  logoPath: settings?.logoPath,
+                  size: 40,
+                  borderRadius: BorderRadius.circular(12),
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -147,13 +162,17 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // Revenue hero card
-            _RevenueHero(
-              revenue: summary.revenue,
-              salesCount: summary.salesCount,
-              avgTicket: summary.avgTicket,
-              chartData: summary.chartData,
-              periodLabel: summary.periodLabel,
+            // Revenue hero card with entrance animation
+            StaggeredEntrance.wrapIndexed(
+              context: context,
+              index: 0,
+              child: _RevenueHero(
+                revenue: summary.revenue,
+                salesCount: summary.salesCount,
+                avgTicket: summary.avgTicket,
+                chartData: summary.chartData,
+                periodLabel: summary.periodLabel,
+              ),
             ),
             const SizedBox(height: 28),
 
@@ -163,6 +182,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
 
+            // Metrics grid with entrance animation
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -171,66 +191,110 @@ class DashboardScreen extends ConsumerWidget {
               crossAxisSpacing: 16,
               childAspectRatio: 1.15,
               children: [
-                MetricCard(
-                  label: 'Gross Profit',
-                  value: formatPeso(summary.grossProfit),
-                  icon: Wallet(color: primary, width: 22, height: 22),
+                StaggeredEntrance.wrapIndexed(
+                  context: context,
+                  index: 1,
+                  child: MetricCard(
+                    label: 'Gross Profit',
+                    value: formatPeso(summary.grossProfit),
+                    icon: Wallet(color: primary, width: 22, height: 22),
+                  ),
                 ),
-                MetricCard(
-                  label: 'Net Profit',
-                  value: formatPeso(summary.netProfit),
-                  icon: GraphUp(color: primary, width: 22, height: 22),
+                StaggeredEntrance.wrapIndexed(
+                  context: context,
+                  index: 2,
+                  child: MetricCard(
+                    label: 'Net Profit',
+                    value: formatPeso(summary.netProfit),
+                    icon: GraphUp(color: primary, width: 22, height: 22),
+                  ),
                 ),
-                MetricCard(
-                  label: 'Cost of Goods',
-                  value: formatPeso(summary.cogs),
-                  icon: BoxIso(color: primary, width: 22, height: 22),
+                StaggeredEntrance.wrapIndexed(
+                  context: context,
+                  index: 3,
+                  child: MetricCard(
+                    label: 'Cost of Goods',
+                    value: formatPeso(summary.cogs),
+                    icon: BoxIso(color: primary, width: 22, height: 22),
+                  ),
                 ),
-                MetricCard(
-                  label: 'Expenses',
-                  value: summary.expenses == 0
-                      ? 'View details'
-                      : formatPeso(summary.expenses),
-                  icon: PlusSquare(color: primary, width: 22, height: 22),
-                  onTap: () => Navigator.of(context, rootNavigator: true).push(
-                    MaterialPageRoute(builder: (_) => const ExpensesScreen()),
+                StaggeredEntrance.wrapIndexed(
+                  context: context,
+                  index: 4,
+                  child: MetricCard(
+                    label: 'Expenses',
+                    value: summary.expenses == 0
+                        ? 'View details'
+                        : formatPeso(summary.expenses),
+                    icon: PlusSquare(color: primary, width: 22, height: 22),
+                    onTap: () => Navigator.of(context, rootNavigator: true).push(
+                      MaterialPageRoute(builder: (_) => const ExpensesScreen()),
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _SmallMetricCard(
-                    label: 'Items Sold',
-                    value: '${summary.totalItemsSold}',
-                    icon: Cart(color: primary, width: 18, height: 18),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _SmallMetricCard(
-                    label: 'Low Stock',
-                    value: '${summary.lowStockCount}',
-                    icon: Icon(
-                      Icons.warning_amber_rounded,
-                      color: primary,
-                      size: 18,
+            Builder(builder: (context) {
+              final screenWidth = MediaQuery.sizeOf(context).width;
+              final cardGap = screenWidth < 380 ? 8.0 : 12.0;
+              return Row(
+                children: [
+                  Expanded(
+                    child: StaggeredEntrance.wrapIndexed(
+                      context: context,
+                      index: 5,
+                      child: _SmallMetricCard(
+                        label: 'Items Sold',
+                        value: '${summary.totalItemsSold}',
+                        icon: Cart(color: primary, width: 18, height: 18),
+                        onTap: () => context.go(RoutePaths.sales),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _SmallMetricCard(
-                    label: 'Margin',
-                    value: '${summary.grossMargin.toStringAsFixed(1)}%',
-                    icon: Percentage(color: primary, width: 18, height: 18),
+                  SizedBox(width: cardGap),
+                  Expanded(
+                    child: StaggeredEntrance.wrapIndexed(
+                      context: context,
+                      index: 6,
+                      child: _SmallMetricCard(
+                        label: 'Low Stock',
+                        value: '${summary.lowStockCount}',
+                        icon: Icon(
+                          Icons.warning_amber_rounded,
+                          color: primary,
+                          size: 18,
+                        ),
+                        onTap: () {
+                          ref
+                              .read(productLowStockFilterProvider.notifier)
+                              .trigger();
+                          context.go(RoutePaths.products);
+                        },
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  SizedBox(width: cardGap),
+                  Expanded(
+                    child: StaggeredEntrance.wrapIndexed(
+                      context: context,
+                      index: 7,
+                      child: _SmallMetricCard(
+                        label: 'Margin',
+                        value: '${summary.grossMargin.toStringAsFixed(1)}%',
+                        icon: Percentage(color: primary, width: 18, height: 18),
+                        onTap: () =>
+                            Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(
+                              builder: (_) => const ReportsScreen()),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -254,12 +318,7 @@ class _SetupBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pct = (progress * 100).round();
-    // Color shifts from amber → green as you complete more
-    final bannerColor = pct >= 75
-        ? const Color(0xFF2E7D32) // dark green
-        : pct >= 50
-            ? const Color(0xFFF57F17) // amber-dark
-            : const Color(0xFFE65100); // deep orange
+    final bannerColor = theme.colorScheme.primary;
 
     return GestureDetector(
       onTap: () => context.push(RoutePaths.setupChecklist),
@@ -440,7 +499,6 @@ class _RevenueHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final secondary = theme.colorScheme.secondary;
 
     return GestureDetector(
       onTap: () {
@@ -452,14 +510,7 @@ class _RevenueHero extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              primary.withValues(alpha: 0.9),
-              secondary.withValues(alpha: 0.8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: primary,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
@@ -639,59 +690,85 @@ class _SmallMetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final Widget icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    return GlassContainer(
-      padding: const EdgeInsets.all(16),
-      borderRadius: BorderRadius.circular(20),
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isCompact = screenWidth < 420;
+
+    final card = GlassContainer(
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 10 : 14,
+        vertical: isCompact ? 12 : 14,
+      ),
+      borderRadius: BorderRadius.circular(isCompact ? 16 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(isCompact ? 6 : 7),
                 decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.08),
+                  color: primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: icon,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: isCompact ? 6 : 8),
               Expanded(
-                child: Text(
-                  label.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.5,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label.toUpperCase(),
+                    maxLines: 2,
+                    softWrap: true,
+                    style: TextStyle(
+                      fontSize: isCompact ? 9 : 10,
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.3,
+                      height: 1.15,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
+          const SizedBox(height: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: isCompact ? 17 : 19,
+                fontWeight: FontWeight.w900,
+                color: theme.colorScheme.onSurface,
+                letterSpacing: -0.5,
+              ),
             ),
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return card;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(isCompact ? 16 : 20),
+      child: card,
     );
   }
 }

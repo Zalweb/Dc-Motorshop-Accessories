@@ -8,6 +8,7 @@ import '../../core/utils/money.dart';
 import '../../data/models/sale.dart';
 import '../../shared/widgets/glass_container.dart';
 import 'sale_payment.dart';
+import 'widgets/sale_complete_dialog.dart';
 
 /// Full breakdown of one sale: line items, totals, payment status, and a
 /// complete-payment action when a balance is outstanding.
@@ -20,20 +21,33 @@ class SaleDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final sales = ref.watch(saleListStreamProvider).value;
+    Sale? sale;
+    if (sales != null) {
+      for (final s in sales) {
+        if (s.uid == saleUid) {
+          sale = s;
+          break;
+        }
+      }
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sale details'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Sale details'),
+        centerTitle: true,
+        actions: [
+          if (sale != null)
+            IconButton(
+              icon: const Icon(Icons.receipt_long_rounded),
+              tooltip: 'Receipt & Print',
+              onPressed: () => showSaleCompleteDialog(context, sale!),
+            ),
+        ],
+      ),
       body: Builder(
         builder: (_) {
           if (sales == null) {
             return const Center(child: CircularProgressIndicator());
-          }
-          Sale? sale;
-          for (final s in sales) {
-            if (s.uid == saleUid) {
-              sale = s;
-              break;
-            }
           }
           if (sale == null) {
             return const Center(child: Text('Sale not found.'));

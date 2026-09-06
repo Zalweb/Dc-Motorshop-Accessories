@@ -1,6 +1,9 @@
 # DC Motorcycle Inventory — Project Instructions
 
 ## MANDATORY: Read Before Any Action
+Every agent or AI session MUST adhere to this fundamental directive:
+> **100% MOBILE & WEB SYNCHRONIZATION:** Every single file edit, new feature, bug fix, model change, and UI screen MUST maintain 100% feature and operational parity between Mobile (Android/iOS) and Web. Never develop for one platform while leaving the other broken or out of date.
+
 Every agent or AI session MUST read these files in order before writing a single line of code or making any decision:
 1. `CLAUDE.md` — stack, architecture, commands, don'ts (this file)
 2. `AGENT.md` — design tokens, screen specs, domain rules, vibe coding rules
@@ -67,6 +70,8 @@ pytest                         # run tests
 - FastAPI backend for future multi-device sync; app is fully functional without it
 
 ## Don'ts
+- Don't implement features for Mobile without maintaining 100% sync on Web (and vice versa)
+- Don't use `dart:io` or `File` directly in shared UI code — always use `AppImage` or platform conditional loaders
 - Don't use `BuildContext` across async gaps without checking `mounted`
 - Don't call Isar directly in widgets — always via repository
 - Don't hardcode strings — use `AppStrings` constants

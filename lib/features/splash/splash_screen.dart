@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_strings.dart';
+import '../../core/providers.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../shared/widgets/app_image.dart';
 import '../../shared/widgets/brand_mark.dart';
 
 /// Branded loading screen (reference 6.jpg). Routing is handled by the auth
 /// guard in the router; this screen is purely visual while the session loads.
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends ConsumerWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
+    final settings = ref.watch(businessSettingsStreamProvider).value;
+    final businessName = (settings?.businessName != null && settings!.businessName.trim().isNotEmpty)
+        ? settings.businessName.trim()
+        : AppStrings.businessName;
+    final logoPath = settings?.logoPath?.trim();
 
     return Scaffold(
       body: Stack(
@@ -30,10 +37,21 @@ class SplashScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Spacer(flex: 3),
-                  const Center(child: BrandMark(size: 110)),
+                  Center(
+                    child: (logoPath != null && logoPath.isNotEmpty)
+                        ? AppImage(
+                            imageUrl: logoPath,
+                            imagePath: logoPath,
+                            width: 110,
+                            height: 110,
+                            fit: BoxFit.contain,
+                            borderRadius: BorderRadius.circular(24),
+                          )
+                        : const BrandMark(size: 110),
+                  ),
                   const SizedBox(height: 32),
                   Text(
-                    AppStrings.businessName,
+                    businessName,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.headingLarge.copyWith(letterSpacing: 0.5),
                   ),
@@ -75,7 +93,7 @@ class _Dots extends StatelessWidget {
             builder: (context, val, child) {
               return CircleAvatar(
                 radius: 4.5,
-                backgroundColor: primary.withOpacity(i == 0 ? 1.0 : 0.4),
+                backgroundColor: primary.withValues(alpha: i == 0 ? 1.0 : 0.4),
               );
             },
           ),

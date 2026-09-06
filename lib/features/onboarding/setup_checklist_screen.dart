@@ -188,14 +188,7 @@ class _SetupChecklistScreenState extends ConsumerState<SetupChecklistScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primary.withValues(alpha: 0.08),
-                  theme.colorScheme.surfaceContainer,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: theme.colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: theme.colorScheme.outlineVariant),
             ),

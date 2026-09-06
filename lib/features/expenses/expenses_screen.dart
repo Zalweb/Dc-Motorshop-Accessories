@@ -168,7 +168,7 @@ class _ExpenseList extends ConsumerWidget {
                     ),
                   );
                   if (confirm == true) {
-                    await ref.read(expenseRepositoryProvider).delete(exp.id);
+                    await ref.read(expenseRepositoryProvider).delete(exp.uid);
                   }
                 },
               ),

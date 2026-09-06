@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_initializing_formals
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

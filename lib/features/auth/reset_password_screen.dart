@@ -52,13 +52,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
 
-      // 1. Update password in local Isar database (silently skips if not found locally)
-      await authRepo.changePasswordByEmail(
-        email: widget.email.trim().toLowerCase(),
-        newPassword: _newPass.text,
-      );
-
-      // 2. Securely call the Edge Function to reset password in Supabase Auth
+      // 1. Securely call the Edge Function to verify OTP and reset password in Supabase Auth
       final fnUrl = '$kSupabaseUrl/functions/v1/reset-password';
 
       final res = await http.post(
@@ -79,6 +73,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       if (res.statusCode != 200 || body['error'] != null) {
         throw Exception(body['error'] ?? 'Failed to reset password');
       }
+
+      // 2. Only after server verification succeeds, update password in local Isar database
+      await authRepo.changePasswordByEmail(
+        email: widget.email.trim().toLowerCase(),
+        newPassword: _newPass.text,
+      );
 
       setState(() => _success = true);
     } catch (e) {

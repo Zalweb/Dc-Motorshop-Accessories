@@ -1,3 +1,4 @@
+// ignore_for_file: prefer_initializing_formals
 import 'dart:convert';
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,7 +46,7 @@ class SupabaseSyncService {
   final SupabaseStorageService _storage;
   final SyncStateNotifier _syncState;
 
-  get _db => SupabaseService.client;
+  SupabaseClient get _db => SupabaseService.client;
 
   static const _syncSincePrefix = 'supabase_sync_since_';
 
@@ -342,9 +343,33 @@ class SupabaseSyncService {
         await _isar.categorys.filter().isDirtyEqualTo(true).findAll();
     if (dirty.isEmpty) return;
 
-    await _db.from('categories').upsert(
-      dirty.map((c) => _categoryToRow(c, bizId)).toList(),
-    );
+    // Fetch existing categories on Supabase to align IDs if matching by name
+    Map<String, String> existingCatNameToId = {};
+    try {
+      final dynamic existingCats = await _db
+          .from('categories')
+          .select('id, name')
+          .eq('business_id', bizId)
+          .isFilter('deleted_at', null);
+      if (existingCats is List) {
+        for (final cat in existingCats) {
+          final name = (cat['name']?.toString() ?? '').trim().toLowerCase();
+          final id = cat['id']?.toString();
+          if (name.isNotEmpty && id != null) {
+            existingCatNameToId[name] = id;
+          }
+        }
+      }
+    } catch (_) {}
+
+    final catRows = <Map<String, dynamic>>[];
+    for (final c in dirty) {
+      final normName = c.name.trim().toLowerCase();
+      final catId = existingCatNameToId[normName] ?? c.uid;
+      catRows.add(_categoryToRow(c, bizId, overrideId: catId));
+    }
+
+    await _db.from('categories').upsert(catRows);
 
     await _isar.writeTxn(() async {
       for (final c in dirty) {
@@ -386,24 +411,79 @@ class SupabaseSyncService {
 
     await _db.from('products').upsert(rows);
 
+    // Fetch existing product_variants from Supabase for this business to prevent barcode & SKU collisions
+    Map<String, String> existingBarcodeToVariantId = {};
+    Map<String, String> existingSkuToVariantId = {};
+    try {
+      final dynamic existingVariantsRes = await _db
+          .from('product_variants')
+          .select('id, barcode, sku, product_id')
+          .eq('business_id', bizId)
+          .isFilter('deleted_at', null);
+
+      if (existingVariantsRes is List) {
+        for (final r in existingVariantsRes) {
+          final row = r as Map<String, dynamic>;
+          final id = row['id']?.toString();
+          final barcode = _nullIfEmpty(row['barcode']?.toString());
+          final sku = _nullIfEmpty(row['sku']?.toString());
+          if (id != null) {
+            if (barcode != null) existingBarcodeToVariantId[barcode] = id;
+            if (sku != null) existingSkuToVariantId[sku] = id;
+          }
+        }
+      }
+    } catch (_) {
+      // Fallback if product_variants query fails
+    }
+
     // Upsert relational product_variants
     final variantRows = <Map<String, dynamic>>[];
+    final Set<String> seenBarcodesInBatch = {};
+    final Set<String> seenSkusInBatch = {};
+
     for (final p in dirty) {
       if (p.hasVariants && p.variants.isNotEmpty) {
         for (final v in p.variants) {
+          var barcode = _nullIfEmpty(v.barcode);
+          var sku = _nullIfEmpty(v.sku);
+          var variantId = v.uid;
+
+          if (barcode != null) {
+            if (seenBarcodesInBatch.contains(barcode)) {
+              barcode = null;
+            } else {
+              seenBarcodesInBatch.add(barcode);
+              if (existingBarcodeToVariantId.containsKey(barcode)) {
+                variantId = existingBarcodeToVariantId[barcode]!;
+              }
+            }
+          }
+
+          if (sku != null) {
+            if (seenSkusInBatch.contains(sku)) {
+              sku = null;
+            } else {
+              seenSkusInBatch.add(sku);
+              if (existingSkuToVariantId.containsKey(sku)) {
+                variantId = existingSkuToVariantId[sku]!;
+              }
+            }
+          }
+
           variantRows.add({
-            'id': v.uid,
+            'id': variantId,
             'product_id': p.uid,
             'business_id': bizId,
-            'sku': v.sku,
-            'barcode': v.barcode,
-            'part_number': v.partNumber ?? p.partNumber,
-            'variant_name': v.name,
-            'option1_name': p.variation1Name,
-            'option1_value': v.option1,
-            'option2_name': p.variation2Name,
-            'option2_value': v.option2,
-            'unit': p.unit,
+            'sku': sku,
+            'barcode': barcode,
+            'part_number': _nullIfEmpty(v.partNumber ?? p.partNumber),
+            'variant_name': v.name.isEmpty ? 'Standard' : v.name,
+            'option1_name': _nullIfEmpty(p.variation1Name),
+            'option1_value': _nullIfEmpty(v.option1),
+            'option2_name': _nullIfEmpty(p.variation2Name),
+            'option2_value': _nullIfEmpty(v.option2),
+            'unit': p.unit.isEmpty ? 'piece' : p.unit,
             'cost_price': v.costPrice.toStringAsFixed(2),
             'selling_price': v.sellingPrice.toStringAsFixed(2),
             'stock_on_hand': v.stockQty,
@@ -415,15 +495,41 @@ class SupabaseSyncService {
         }
       } else {
         // Standard single variant
+        var barcode = _nullIfEmpty(p.barcode);
+        var sku = _nullIfEmpty(p.barcode);
+        var variantId = p.uid;
+
+        if (barcode != null) {
+          if (seenBarcodesInBatch.contains(barcode)) {
+            barcode = null;
+          } else {
+            seenBarcodesInBatch.add(barcode);
+            if (existingBarcodeToVariantId.containsKey(barcode)) {
+              variantId = existingBarcodeToVariantId[barcode]!;
+            }
+          }
+        }
+
+        if (sku != null) {
+          if (seenSkusInBatch.contains(sku)) {
+            sku = null;
+          } else {
+            seenSkusInBatch.add(sku);
+            if (existingSkuToVariantId.containsKey(sku)) {
+              variantId = existingSkuToVariantId[sku]!;
+            }
+          }
+        }
+
         variantRows.add({
-          'id': p.uid,
+          'id': variantId,
           'product_id': p.uid,
           'business_id': bizId,
-          'sku': p.barcode,
-          'barcode': p.barcode,
-          'part_number': p.partNumber,
+          'sku': sku,
+          'barcode': barcode,
+          'part_number': _nullIfEmpty(p.partNumber),
           'variant_name': 'Standard',
-          'unit': p.unit,
+          'unit': p.unit.isEmpty ? 'piece' : p.unit,
           'cost_price': p.costPrice.toStringAsFixed(2),
           'selling_price': p.sellingPrice.toStringAsFixed(2),
           'stock_on_hand': p.stockQty,
@@ -436,7 +542,23 @@ class SupabaseSyncService {
     }
 
     if (variantRows.isNotEmpty) {
-      await _db.from('product_variants').upsert(variantRows);
+      try {
+        await _db.from('product_variants').upsert(variantRows);
+      } catch (_) {
+        for (final row in variantRows) {
+          try {
+            await _db.from('product_variants').upsert(row);
+          } on PostgrestException catch (pe) {
+            if (pe.code == '23505') {
+              row['barcode'] = null;
+              row['sku'] = null;
+              try {
+                await _db.from('product_variants').upsert(row);
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+      }
     }
 
     await _isar.writeTxn(() async {
@@ -715,6 +837,7 @@ class SupabaseSyncService {
               ..option1 = item['option1']?.toString()
               ..option2 = item['option2']?.toString()
               ..barcode = item['barcode']?.toString()
+              ..partNumber = item['part_number']?.toString()
               ..costPrice = double.tryParse(item['cost_price']?.toString() ?? '0') ?? 0
               ..sellingPrice = double.tryParse(item['selling_price']?.toString() ?? '0') ?? 0
               ..stockQty = int.tryParse(item['stock_qty']?.toString() ?? '0') ?? 0
@@ -723,6 +846,31 @@ class SupabaseSyncService {
           );
         }
       }
+    }
+
+    if (parsedVariants.isEmpty && (row['has_variants'] == true)) {
+      try {
+        final vRes = await _db
+            .from('product_variants')
+            .select()
+            .eq('product_id', rowId)
+            .isFilter('deleted_at', null);
+        for (final v in (vRes as List)) {
+          final vMap = (v as Map).cast<String, dynamic>();
+          parsedVariants.add(
+            ProductVariant()
+              ..uid = vMap['id']?.toString() ?? ProductVariant().uid
+              ..name = vMap['variant_name']?.toString() ?? ''
+              ..option1 = vMap['option1_value']?.toString() ?? vMap['variant_name']?.toString()
+              ..option2 = vMap['option2_value']?.toString()
+              ..barcode = vMap['barcode']?.toString()
+              ..partNumber = vMap['part_number']?.toString()
+              ..costPrice = double.tryParse(vMap['cost_price']?.toString() ?? '0') ?? 0
+              ..sellingPrice = double.tryParse(vMap['selling_price']?.toString() ?? '0') ?? 0
+              ..stockQty = int.tryParse(vMap['stock_on_hand']?.toString() ?? '0') ?? 0,
+          );
+        }
+      } catch (_) {}
     }
 
     final product = existing ?? Product();
@@ -845,10 +993,10 @@ class SupabaseSyncService {
 
   // ── Serialization (local → Supabase row) ───────────────────────────────────
 
-  Map<String, dynamic> _categoryToRow(Category c, String bizId) => {
-        'id': c.uid,
+  Map<String, dynamic> _categoryToRow(Category c, String bizId, {String? overrideId}) => {
+        'id': overrideId ?? c.uid,
         'business_id': bizId,
-        'name': c.name,
+        'name': c.name.trim(),
         'is_service': c.isService,
         'created_at': c.createdAt.toUtc().toIso8601String(),
         'updated_at': c.updatedAt.toUtc().toIso8601String(),
@@ -884,19 +1032,21 @@ class SupabaseSyncService {
   Future<Map<String, dynamic>> _productToRowAsync(Product p, String bizId) async {
     // Resolve category_id from local Isar by matching category name
     String? catId;
-    if (p.category != null) {
+    if (p.category != null && p.category!.trim().isNotEmpty) {
       final cat = await _isar.categorys
           .filter()
-          .nameEqualTo(p.category!, caseSensitive: false)
+          .nameEqualTo(p.category!.trim(), caseSensitive: false)
           .findFirst();
       catId = cat?.uid;
     }
     final variantList = p.variants.map((v) => {
       'uid': v.uid,
       'name': v.name,
-      'option1': v.option1,
-      'option2': v.option2,
-      'barcode': v.barcode,
+      'option1': _nullIfEmpty(v.option1),
+      'option2': _nullIfEmpty(v.option2),
+      'barcode': _nullIfEmpty(v.barcode),
+      'sku': _nullIfEmpty(v.sku),
+      'part_number': _nullIfEmpty(v.partNumber),
       'cost_price': v.costPrice,
       'selling_price': v.sellingPrice,
       'stock_qty': v.stockQty,
@@ -908,16 +1058,16 @@ class SupabaseSyncService {
       'id': p.uid,
       'business_id': bizId,
       'name': p.name,
-      'barcode': p.barcode,
-      'part_number': p.partNumber,
-      'description': p.description,
+      'barcode': _nullIfEmpty(p.barcode),
+      'part_number': _nullIfEmpty(p.partNumber),
+      'description': _nullIfEmpty(p.description),
       'category_id': catId,
-      'brand': p.brand,
-      'unit': p.unit,
+      'brand': _nullIfEmpty(p.brand),
+      'unit': p.unit.isEmpty ? 'piece' : p.unit,
       'is_service': p.isService,
       'has_variants': p.hasVariants,
-      'variation1_name': p.variation1Name,
-      'variation2_name': p.variation2Name,
+      'variation1_name': _nullIfEmpty(p.variation1Name),
+      'variation2_name': _nullIfEmpty(p.variation2Name),
       'variants': variantList,
       'cost_price': p.costPrice.toStringAsFixed(2),
       'selling_price': p.sellingPrice.toStringAsFixed(2),
@@ -945,6 +1095,12 @@ class SupabaseSyncService {
       };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  String? _nullIfEmpty(String? str) {
+    if (str == null) return null;
+    final trimmed = str.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   String _dateOnly(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'

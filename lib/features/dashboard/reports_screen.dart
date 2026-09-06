@@ -78,7 +78,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final secondary = theme.colorScheme.secondary;
 
     // Watch sales, products, and expenses
     final includeUnpaid = ref
@@ -261,18 +260,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Revenue Card with branding gradient
+          // Revenue Card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primary.withValues(alpha: 0.9),
-                  secondary.withValues(alpha: 0.8),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: primary,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -345,28 +337,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 label: 'GROSS PROFIT',
                 value: _formatPeso(grossProfit),
                 icon: Icons.account_balance_wallet_outlined,
-                color: const Color(0xFF3B82F6),
+                color: primary,
                 isDark: isDark,
               ),
               _buildPLCard(
                 label: 'NET PROFIT',
                 value: _formatPeso(netProfit),
                 icon: Icons.insert_chart_outlined,
-                color: const Color(0xFF4ADE80),
+                color: primary,
                 isDark: isDark,
               ),
               _buildPLCard(
                 label: 'COST OF GOODS',
                 value: _formatPeso(cogs),
                 icon: Icons.inventory_2_outlined,
-                color: const Color(0xFF2DD4BF),
+                color: primary,
                 isDark: isDark,
               ),
               _buildPLCard(
                 label: 'EXPENSES',
                 value: _formatPeso(expenseTotal),
                 icon: Icons.receipt_long_outlined,
-                color: const Color(0xFFF59E0B),
+                color: primary,
                 isDark: isDark,
               ),
             ],
@@ -378,13 +370,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             borderRadius: BorderRadius.circular(16),
             child: Column(
               children: [
-                _buildRowItem('AVG TICKET', _formatPeso(avgTicket), Icons.assignment_outlined, const Color(0xFFF59E0B), isDark),
+                _buildRowItem('AVG TICKET', _formatPeso(avgTicket), Icons.assignment_outlined, primary, isDark),
                 Divider(color: isDark ? AppColors.border : AppColors.borderLight, height: 1),
-                _buildRowItem('DISCOUNT', _formatPeso(discount), Icons.label_outline, const Color(0xFFA78BFA), isDark),
+                _buildRowItem('DISCOUNT', _formatPeso(discount), Icons.label_outline, primary, isDark),
                 Divider(color: isDark ? AppColors.border : AppColors.borderLight, height: 1),
-                _buildRowItem('GROSS MARGIN', '${grossMargin.toStringAsFixed(1)}%', Icons.show_chart, const Color(0xFF10B981), isDark),
+                _buildRowItem('GROSS MARGIN', '${grossMargin.toStringAsFixed(1)}%', Icons.show_chart, primary, isDark),
                 Divider(color: isDark ? AppColors.border : AppColors.borderLight, height: 1),
-                _buildRowItem('NET MARGIN', '${netMargin.toStringAsFixed(1)}%', Icons.trending_up, const Color(0xFF38BDF8), isDark),
+                _buildRowItem('NET MARGIN', '${netMargin.toStringAsFixed(1)}%', Icons.trending_up, primary, isDark),
               ],
             ),
           ),
@@ -435,7 +427,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           decoration: BoxDecoration(
                             color: isMax
                                 ? primary
-                                : (isDark ? AppColors.bgSurface2 : AppColors.bgSurface2Light),
+                                : primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),

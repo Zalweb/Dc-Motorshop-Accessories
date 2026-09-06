@@ -18,8 +18,8 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.bgBaseLight,
       colorScheme: ColorScheme.light(
         surface: AppColors.bgBaseLight,
-        surfaceContainer: Colors.white.withOpacity(0.7),
-        outlineVariant: Colors.black.withOpacity(0.08),
+        surfaceContainer: Colors.white.withValues(alpha: 0.7),
+        outlineVariant: Colors.black.withValues(alpha: 0.08),
         primary: accentColor,
         secondary: accentDark,
         error: AppColors.danger,
@@ -43,7 +43,7 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white.withOpacity(0.7),
+        fillColor: Colors.white.withValues(alpha: 0.7),
         hintStyle: const TextStyle(color: AppColors.textMutedLight),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
@@ -65,6 +65,8 @@ abstract final class AppTheme {
           foregroundColor: AppColors.textPrimaryLight,
           minimumSize: const Size(64, 48),
           textStyle: AppTextStyles.button,
+          splashFactory: InkSparkle.splashFactory,
+          animationDuration: const Duration(milliseconds: 140),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
           ),
@@ -74,6 +76,8 @@ abstract final class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.textPrimaryLight,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          splashFactory: InkSparkle.splashFactory,
+          animationDuration: const Duration(milliseconds: 140),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -82,9 +86,9 @@ abstract final class AppTheme {
         shape: const CircleBorder(),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: Colors.white.withOpacity(0.7),
-        disabledColor: Colors.white.withOpacity(0.7),
-        selectedColor: accentColor.withOpacity(0.15),
+        backgroundColor: Colors.white.withValues(alpha: 0.7),
+        disabledColor: Colors.white.withValues(alpha: 0.7),
+        selectedColor: accentColor.withValues(alpha: 0.15),
         secondarySelectedColor: accentColor,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(
@@ -94,6 +98,19 @@ abstract final class AppTheme {
         labelStyle: const TextStyle(color: AppColors.textPrimaryLight),
         secondaryLabelStyle: const TextStyle(color: AppColors.textPrimaryLight),
         brightness: Brightness.light,
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white.withValues(alpha: 0.7),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+          side: const BorderSide(color: AppColors.borderLight),
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accentColor,
+        linearTrackColor: accentColor.withValues(alpha: 0.15),
+        circularTrackColor: accentColor.withValues(alpha: 0.15),
       ),
     );
   }
@@ -110,8 +127,8 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.bgBase,
       colorScheme: ColorScheme.dark(
         surface: AppColors.bgBase,
-        surfaceContainer: AppColors.bgSurface.withOpacity(0.7),
-        outlineVariant: Colors.white.withOpacity(0.08),
+        surfaceContainer: AppColors.bgSurface.withValues(alpha: 0.7),
+        outlineVariant: Colors.white.withValues(alpha: 0.08),
         primary: accentColor,
         secondary: accentLight,
         error: AppColors.danger,
@@ -135,7 +152,7 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.bgSurface.withOpacity(0.7),
+        fillColor: AppColors.bgSurface.withValues(alpha: 0.7),
         hintStyle: const TextStyle(color: AppColors.textMuted),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
@@ -157,6 +174,8 @@ abstract final class AppTheme {
           foregroundColor: AppColors.textPrimary,
           minimumSize: const Size(64, 48),
           textStyle: AppTextStyles.button,
+          splashFactory: InkSparkle.splashFactory,
+          animationDuration: const Duration(milliseconds: 140),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.buttonRadius),
           ),
@@ -166,6 +185,8 @@ abstract final class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.textPrimary,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          splashFactory: InkSparkle.splashFactory,
+          animationDuration: const Duration(milliseconds: 140),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -174,9 +195,9 @@ abstract final class AppTheme {
         shape: const CircleBorder(),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.bgSurface.withOpacity(0.7),
-        disabledColor: AppColors.bgSurface.withOpacity(0.7),
-        selectedColor: accentColor.withOpacity(0.15),
+        backgroundColor: AppColors.bgSurface.withValues(alpha: 0.7),
+        disabledColor: AppColors.bgSurface.withValues(alpha: 0.7),
+        selectedColor: accentColor.withValues(alpha: 0.15),
         secondarySelectedColor: accentColor,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(
@@ -186,6 +207,19 @@ abstract final class AppTheme {
         labelStyle: const TextStyle(color: AppColors.textPrimary),
         secondaryLabelStyle: const TextStyle(color: AppColors.textPrimary),
         brightness: Brightness.dark,
+      ),
+      cardTheme: CardThemeData(
+        color: AppColors.bgSurface.withValues(alpha: 0.7),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.cardRadius),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accentColor,
+        linearTrackColor: accentColor.withValues(alpha: 0.15),
+        circularTrackColor: accentColor.withValues(alpha: 0.15),
       ),
     );
   }

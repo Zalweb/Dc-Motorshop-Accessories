@@ -1,19 +1,108 @@
-<!doctype html>
-<html lang="en" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0A0A0A" />
-    <title>DC Motorcycle Inventory — Modern POS & Stock Management</title>
-    <meta name="description" content="Offline-first POS and Inventory management system for motorcycle parts & accessories shop." />
-    <!-- Google Fonts: Inter & Outfit -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  </head>
-  <body class="bg-[#0A0A0A] text-white antialiased selection:bg-blue-600 selection:text-white overflow-x-hidden">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="DC Motorshop &amp; Accessories (MoSPAMS) — POS &amp; Inventory Management System.">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss: blob: data:; worker-src 'self' blob:; object-src 'none';">
+
+  <!-- Anti-clickjacking frame guard -->
+  <script>
+    if (window.top !== window.self) {
+      window.top.location = window.self.location;
+    }
+  </script>
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DC Motorshop">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicons (MoSPAMS Logo) -->
+  <link rel="icon" type="image/svg+xml" href="logo.svg"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png"/>
+  <link rel="shortcut icon" href="favicon.png"/>
+
+  <title>DC Motorshop &amp; Accessories — MoSPAMS POS</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body style="margin: 0; background-color: #121212;">
+  <div id="loading" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div style="display: flex; align-items: center; justify-content: center; width: 110px; height: 110px; background-color: #000000; border-radius: 24px; overflow: hidden;">
+      <img src="logo.svg" alt="DC Motorshop" style="width: 78%; height: 78%; object-fit: contain;">
+    </div>
+    <div style="margin-top: 32px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff;">DC MOTORSHOP &amp; ACCESSORIES</div>
+    <div style="margin-top: 12px; font-size: 14px; color: #9CA3AF;">Welcome back! Preparing your dashboard...</div>
+    <div style="margin-top: 40px; display: flex; gap: 8px;">
+      <div class="dc-dot"></div>
+      <div class="dc-dot" style="animation-delay: 0.2s;"></div>
+      <div class="dc-dot" style="animation-delay: 0.4s;"></div>
+    </div>
+    <style>
+      .dc-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background-color: #2563EB;
+        opacity: 0.4;
+        animation: dc-pulse 0.9s ease-in-out infinite;
+      }
+      @keyframes dc-pulse {
+        0%, 100% { opacity: 0.4; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
+      }
+    </style>
+  </div>
+  <script>
+    (function() {
+      function removeLoader() {
+        const loader = document.getElementById('loading');
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.transition = 'opacity 0.3s ease';
+          setTimeout(function() { loader.remove(); }, 300);
+        }
+      }
+      const observer = new MutationObserver(function(mutations) {
+        for (let i = 0; i < mutations.length; i++) {
+          const added = mutations[i].addedNodes;
+          for (let j = 0; j < added.length; j++) {
+            const node = added[j];
+            if (node.nodeType === 1) {
+              const tag = node.tagName.toLowerCase();
+              if (tag === 'flutter-view' || tag === 'flt-glass-pane' || tag === 'flt-scene-host') {
+                removeLoader();
+                observer.disconnect();
+                return;
+              }
+            }
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      setTimeout(removeLoader, 7000);
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
 </html>
