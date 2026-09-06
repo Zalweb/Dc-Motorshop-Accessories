@@ -117,34 +117,92 @@ abstract final class AppPageTransitions {
   }
 
   /// Animated tab switcher for the 5 primary tabs in MainShell.
+  /// Uses a high-performance single-subtree transition to preserve 60fps/120Hz
+  /// motion without duplicating navigation shell branches.
   static Widget buildTabSwitcher({
     required int currentIndex,
     required Widget child,
   }) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) {
-        final slide = Tween<Offset>(
-          begin: const Offset(0.015, 0),
-          end: Offset.zero,
-        ).animate(animation);
+    return TabTransitionWrapper(
+      currentIndex: currentIndex,
+      child: child,
+    );
+  }
+}
 
-        final fade = Tween<double>(begin: 0.0, end: 1.0).animate(animation);
+/// Smooth single-tree tab transition that avoids duplicating StatefulNavigationShell
+/// in the widget tree while retaining identical ease-out cubic fade and slide motion.
+class TabTransitionWrapper extends StatefulWidget {
+  const TabTransitionWrapper({
+    super.key,
+    required this.currentIndex,
+    required this.child,
+  });
 
-        return SlideTransition(
-          position: slide,
-          child: FadeTransition(
-            opacity: fade,
-            child: child,
-          ),
-        );
-      },
-      child: KeyedSubtree(
-        key: ValueKey<int>(currentIndex),
-        child: child,
+  final int currentIndex;
+  final Widget child;
+
+  @override
+  State<TabTransitionWrapper> createState() => _TabTransitionWrapperState();
+}
+
+class _TabTransitionWrapperState extends State<TabTransitionWrapper>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _curve;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
+    _curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0.015, 0),
+      end: Offset.zero,
+    ).animate(_curve);
+    _fade = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(_curve);
+
+    // Initial render is already fully shown
+    _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(covariant TabTransitionWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex) {
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slide,
+      child: FadeTransition(
+        opacity: _fade,
+        child: RepaintBoundary(
+          child: widget.child,
+        ),
       ),
     );
   }
 }
+

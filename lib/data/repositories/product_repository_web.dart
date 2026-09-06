@@ -23,23 +23,98 @@ class ProductRepositoryWeb {
 
   static const _tbl = 'products';
 
+  static List<Product>? _cachedProducts;
+  static final List<StreamController<List<Product>>> _controllers = [];
+  static Timer? _pollTimer;
+  static bool _isFetching = false;
+
+  static void clearCache() {
+    _cachedProducts = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _isFetching = false;
+  }
+
+  static void _notifyControllers() {
+    if (_cachedProducts == null) return;
+    final snapshot = List<Product>.unmodifiable(_cachedProducts!);
+    for (final c in List.of(_controllers)) {
+      if (!c.isClosed) c.add(snapshot);
+    }
+  }
+
+  static bool _productsEqual(List<Product>? a, List<Product> b) {
+    if (a == null) return false;
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      final pA = a[i];
+      final pB = b[i];
+      if (pA.uid != pB.uid ||
+          pA.stockQty != pB.stockQty ||
+          pA.sellingPrice != pB.sellingPrice ||
+          pA.name != pB.name ||
+          pA.category != pB.category ||
+          pA.updatedAt != pB.updatedAt ||
+          pA.variants.length != pB.variants.length) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Stream<List<Product>> watchAll() {
     final controller = StreamController<List<Product>>.broadcast();
-    Future<void> emit() async {
-      final rows = await _fetch();
-      if (!controller.isClosed) controller.add(rows);
+    _controllers.add(controller);
+
+    // 1. Immediately emit cached data if available for instant tab rendering
+    if (_cachedProducts != null) {
+      controller.add(List<Product>.unmodifiable(_cachedProducts!));
     }
 
-    emit();
-    final timer = Timer.periodic(const Duration(seconds: 15), (_) => emit());
+    Future<void> syncFromCloud() async {
+      if (_isFetching) return;
+      _isFetching = true;
+      try {
+        final rows = await _fetch();
+        if (!_productsEqual(_cachedProducts, rows)) {
+          _cachedProducts = rows;
+          _notifyControllers();
+        }
+      } catch (_) {
+        // Retain existing cache on network glitch
+      } finally {
+        _isFetching = false;
+      }
+    }
+
+    // Trigger initial fetch
+    syncFromCloud();
+
+    // Deduplicated shared polling timer (30s)
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 30), (_) => syncFromCloud());
+
     controller.onCancel = () {
-      timer.cancel();
+      _controllers.remove(controller);
       controller.close();
+      if (_controllers.isEmpty) {
+        _pollTimer?.cancel();
+        _pollTimer = null;
+      }
     };
     return controller.stream;
   }
 
-  Future<List<Product>> all() => _fetch();
+  Future<List<Product>> all() async {
+    final bizId = await _ensureBizId();
+    if (bizId.isEmpty) return [];
+    if (_cachedProducts != null) {
+      return List<Product>.unmodifiable(_cachedProducts!);
+    }
+    final rows = await _fetch();
+    _cachedProducts = rows;
+    return rows;
+  }
 
   Future<List<Product>> _fetch() async {
     final bizId = await _ensureBizId();
@@ -106,6 +181,14 @@ class ProductRepositoryWeb {
   }
 
   Future<Product?> byId(String id) async {
+    if (_cachedProducts != null) {
+      final cached = _cachedProducts!.cast<Product?>().firstWhere(
+        (p) => p?.uid == id || p?.id.toString() == id,
+        orElse: () => null,
+      );
+      if (cached != null) return cached;
+    }
+
     final bizId = await _ensureBizId();
     if (bizId.isEmpty) return null;
     final res = await db
@@ -136,6 +219,26 @@ class ProductRepositoryWeb {
   Future<Product?> findByBarcode(String code) async {
     final clean = sanitizePostgrestFilter(code);
     if (clean.isEmpty) return null;
+
+    if (_cachedProducts != null) {
+      final match = _cachedProducts!.cast<Product?>().firstWhere(
+        (p) {
+          if (p == null) return false;
+          if (p.barcode == clean || p.partNumber == clean) return true;
+          if (p.hasVariants) {
+            for (final v in p.variants) {
+              if (v.barcode == clean || v.sku == clean || v.partNumber == clean) {
+                return true;
+              }
+            }
+          }
+          return false;
+        },
+        orElse: () => null,
+      );
+      if (match != null) return match;
+    }
+
     final bizId = await _ensureBizId();
     if (bizId.isEmpty) return null;
     final res = await db
@@ -170,6 +273,21 @@ class ProductRepositoryWeb {
       ..updatedAt = DateTime.now()
       ..isDirty = true;
     final row = product.toJson()..['business_id'] = bizId;
+    row.remove('image_path');
+    row.remove('stock_qty');
+
+    if (_cachedProducts != null) {
+      final list = List<Product>.from(_cachedProducts!);
+      final idx = list.indexWhere((p) => p.uid == product.uid || (p.id != 0 && p.id == product.id));
+      if (idx != -1) {
+        list[idx] = product;
+      } else {
+        list.insert(0, product);
+      }
+      _cachedProducts = list;
+      _notifyControllers();
+    }
+
     await db.from(_tbl).upsert(row, onConflict: 'id');
 
     if (product.hasVariants && product.variants.isNotEmpty) {
@@ -197,6 +315,12 @@ class ProductRepositoryWeb {
   }
 
   Future<void> delete(String id) async {
+    if (_cachedProducts != null) {
+      final list = List<Product>.from(_cachedProducts!);
+      list.removeWhere((p) => p.uid == id || p.id.toString() == id);
+      _cachedProducts = list;
+      _notifyControllers();
+    }
     await db.from(_tbl).update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
   }
 
@@ -225,6 +349,17 @@ class ProductRepositoryWeb {
     product
       ..updatedAt = DateTime.now()
       ..isDirty = true;
+
+    if (_cachedProducts != null) {
+      final list = List<Product>.from(_cachedProducts!);
+      final idx = list.indexWhere((p) => p.uid == productId || p.id.toString() == productId);
+      if (idx != -1) {
+        list[idx] = product;
+        _cachedProducts = list;
+        _notifyControllers();
+      }
+    }
+
     await db
         .from(_tbl)
         .update({
