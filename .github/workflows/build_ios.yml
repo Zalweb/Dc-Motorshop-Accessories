@@ -1,0 +1,61 @@
+﻿name: Build iOS IPA (Sideloadable)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'GitHub Release tag to attach IPA to (e.g. v1.2.0)'
+        required: false
+        default: 'v1.2.0'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-ios:
+    name: Build Sideloadable iOS IPA
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS App (Unsigned for Sideloading)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package Runner.app into Sideloadable IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r MoSPAMS.ipa Payload
+          ls -lh MoSPAMS.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoSPAMS-iOS-IPA
+          path: MoSPAMS.ipa
+          retention-days: 14
+
+      - name: Attach IPA to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.release_tag }}"
+          fi
+          echo "Attaching MoSPAMS.ipa to release: $TAG"
+          gh release upload "$TAG" MoSPAMS.ipa --clobber || echo "Release upload skipped or failed"
