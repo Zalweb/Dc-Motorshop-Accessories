@@ -43,19 +43,6 @@
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png"/>
   <link rel="shortcut icon" href="favicon.png"/>
 
-  <!-- Preconnect & DNS prefetch for Supabase backend, CanvasKit CDN, and Google Fonts -->
-  <link rel="preconnect" href="https://wuzrwqqqidrnziphamzr.supabase.co" crossorigin>
-  <link rel="dns-prefetch" href="https://wuzrwqqqidrnziphamzr.supabase.co">
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-
-  <!-- Preload critical application scripts for faster parallel execution -->
-  <link rel="preload" href="flutter_bootstrap.js" as="script">
-  <link rel="preload" href="main.dart.js" as="script">
-
   <title>DC Motorshop &amp; Accessories — MoSPAMS POS</title>
   <link rel="manifest" href="manifest.json">
 </head>
@@ -88,10 +75,7 @@
   </div>
   <script>
     (function() {
-      var loaderRemoved = false;
       function removeLoader() {
-        if (loaderRemoved) return;
-        loaderRemoved = true;
         const loader = document.getElementById('loading');
         if (loader) {
           loader.style.opacity = '0';
@@ -99,13 +83,6 @@
           setTimeout(function() { loader.remove(); }, 300);
         }
       }
-
-      // 1. Primary: Trigger as soon as Flutter renders the very first frame
-      window.addEventListener('flutter-first-frame', function() {
-        removeLoader();
-      });
-
-      // 2. Secondary: If flutter-view is added, wait for next animation frame before fading out
       const observer = new MutationObserver(function(mutations) {
         for (let i = 0; i < mutations.length; i++) {
           const added = mutations[i].addedNodes;
@@ -114,9 +91,7 @@
             if (node.nodeType === 1) {
               const tag = node.tagName.toLowerCase();
               if (tag === 'flutter-view' || tag === 'flt-glass-pane' || tag === 'flt-scene-host') {
-                requestAnimationFrame(function() {
-                  setTimeout(removeLoader, 150);
-                });
+                removeLoader();
                 observer.disconnect();
                 return;
               }
@@ -125,8 +100,6 @@
         }
       });
       observer.observe(document.body, { childList: true, subtree: true });
-
-      // 3. Fallback: Maximum wait safety timeout
       setTimeout(removeLoader, 7000);
     })();
   </script>

@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────────────────────
 // Web-safe models: Sale + SaleItem (no isar annotations, no part directive)
 // ─────────────────────────────────────────────────────────────────────────────
 import '../../core/utils/uuid.dart';
@@ -39,7 +39,7 @@ class SaleItem {
         unitCost: (j['unit_cost'] as num?)?.toDouble() ?? 0,
         lineTotal: (j['line_total'] as num?)?.toDouble() ?? 0,
         productUid: j['product_id'] as String?,
-        variantUid: (j['product_variant_id'] ?? j['variant_uid']) as String?,
+        variantUid: j['variant_uid'] as String?,
         variantName: j['variant_name'] as String?,
         sku: j['sku'] as String?,
       );

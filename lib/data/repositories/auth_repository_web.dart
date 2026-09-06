@@ -4,12 +4,6 @@ import '../../core/supabase/supabase_auth_service.dart';
 import '../../core/supabase/supabase_service.dart';
 import '../../core/web/web_session.dart';
 import '../models/user_web.dart';
-import 'category_repository_web.dart';
-import 'expense_repository_web.dart';
-import 'inventory_repository_web.dart';
-import 'product_repository_web.dart';
-import 'sale_repository_web.dart';
-import 'settings_repository_web.dart';
 
 /// Thrown when a sign-up or sign-in cannot be completed. The [message] is
 /// safe to show directly in the UI.
@@ -73,13 +67,7 @@ class AuthRepositoryWeb {
 
   Future<void> logout() async {
     await _supabaseAuth.signOut();
-    await WebSession.clear();
-    ProductRepositoryWeb.clearCache();
-    SaleRepositoryWeb.clearCache();
-    CategoryRepositoryWeb.clearCache();
-    ExpenseRepositoryWeb.clearCache();
-    InventoryRepositoryWeb.clearCache();
-    SettingsRepositoryWeb.clearCache();
+    WebSession.clear();
   }
 
   Future<void> markNewShopSetupComplete(int userId) async {

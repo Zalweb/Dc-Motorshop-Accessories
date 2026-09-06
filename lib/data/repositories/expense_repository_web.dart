@@ -21,91 +21,20 @@ class ExpenseRepositoryWeb {
 
   static const _tbl = 'expenses';
 
-  static List<Expense>? _cachedExpenses;
-  static final List<StreamController<List<Expense>>> _controllers = [];
-  static Timer? _pollTimer;
-  static bool _isFetching = false;
-
-  static void clearCache() {
-    _cachedExpenses = null;
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    _isFetching = false;
-  }
-
-  static void _notifyControllers() {
-    if (_cachedExpenses == null) return;
-    final snapshot = List<Expense>.unmodifiable(_cachedExpenses!);
-    for (final c in List.of(_controllers)) {
-      if (!c.isClosed) c.add(snapshot);
-    }
-  }
-
-  static bool _expensesEqual(List<Expense>? a, List<Expense> b) {
-    if (a == null) return false;
-    if (identical(a, b)) return true;
-    if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) {
-      final eA = a[i];
-      final eB = b[i];
-      if (eA.uid != eB.uid ||
-          eA.amount != eB.amount ||
-          eA.category != eB.category ||
-          eA.note != eB.note ||
-          eA.updatedAt != eB.updatedAt) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   Stream<List<Expense>> watchAll() {
     final controller = StreamController<List<Expense>>.broadcast();
-    _controllers.add(controller);
-
-    if (_cachedExpenses != null) {
-      controller.add(List<Expense>.unmodifiable(_cachedExpenses!));
+    Future<void> emit() async {
+      final rows = await _fetch();
+      if (!controller.isClosed) controller.add(rows);
     }
 
-    Future<void> syncFromCloud() async {
-      if (_isFetching) return;
-      _isFetching = true;
-      try {
-        final rows = await _fetch();
-        if (!_expensesEqual(_cachedExpenses, rows)) {
-          _cachedExpenses = rows;
-          _notifyControllers();
-        }
-      } catch (_) {
-        // Retain cache
-      } finally {
-        _isFetching = false;
-      }
-    }
-
-    syncFromCloud();
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 30), (_) => syncFromCloud());
-
+    emit();
+    final timer = Timer.periodic(const Duration(seconds: 20), (_) => emit());
     controller.onCancel = () {
-      _controllers.remove(controller);
+      timer.cancel();
       controller.close();
-      if (_controllers.isEmpty) {
-        _pollTimer?.cancel();
-        _pollTimer = null;
-      }
     };
     return controller.stream;
-  }
-
-  Future<List<Expense>> all() async {
-    final bizId = await _ensureBizId();
-    if (bizId.isEmpty) return [];
-    if (_cachedExpenses != null) {
-      return List<Expense>.unmodifiable(_cachedExpenses!);
-    }
-    final rows = await _fetch();
-    _cachedExpenses = rows;
-    return rows;
   }
 
   Future<List<Expense>> _fetch() async {
@@ -118,9 +47,7 @@ class ExpenseRepositoryWeb {
         .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
     final rows = List<Map<String, dynamic>>.from(res as List);
-    final parsed = rows.map(Expense.fromJson).toList();
-    _cachedExpenses = parsed;
-    return parsed;
+    return rows.map(Expense.fromJson).toList();
   }
 
   Future<List<Expense>> between(DateTime start, DateTime end) async {
@@ -145,29 +72,10 @@ class ExpenseRepositoryWeb {
     final row = expense.toJson()
       ..['business_id'] = bizId
       ..['created_at'] = expense.createdAt.toUtc().toIso8601String();
-
-    if (_cachedExpenses != null) {
-      final list = List<Expense>.from(_cachedExpenses!);
-      final idx = list.indexWhere((e) => e.uid == expense.uid || (e.id != 0 && e.id == expense.id));
-      if (idx != -1) {
-        list[idx] = expense;
-      } else {
-        list.insert(0, expense);
-      }
-      _cachedExpenses = list;
-      _notifyControllers();
-    }
-
     await db.from(_tbl).upsert(row, onConflict: 'id');
   }
 
   Future<void> delete(String id) async {
-    if (_cachedExpenses != null) {
-      final list = List<Expense>.from(_cachedExpenses!)
-        ..removeWhere((e) => e.uid == id || e.id.toString() == id);
-      _cachedExpenses = list;
-      _notifyControllers();
-    }
     await db
         .from(_tbl)
         .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})

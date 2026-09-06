@@ -1,4 +1,3 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Lightweight web-only session state.
@@ -9,8 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class WebSession {
   WebSession._();
 
-  static const String _kCachedBusinessIdKey = 'web_cached_business_id';
-
   static String? userId;
   static String? businessId;
 
@@ -19,16 +16,7 @@ class WebSession {
   static Future<String?> ensureBusinessId(SupabaseClient db) async {
     final uid = db.auth.currentUser?.id;
     if (uid == null) return null;
-    if (businessId != null && businessId!.isNotEmpty) return businessId;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString(_kCachedBusinessIdKey);
-      if (cached != null && cached.isNotEmpty) {
-        businessId = cached;
-        return businessId;
-      }
-    } catch (_) {}
+    if (businessId != null) return businessId;
 
     final res = await db
         .from('business_profiles')
@@ -38,23 +26,12 @@ class WebSession {
         .limit(1)
         .maybeSingle();
     final id = res?['id']?.toString();
-    if (id != null && id.isNotEmpty) {
-      businessId = id;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_kCachedBusinessIdKey, id);
-      } catch (_) {}
-    }
+    if (id != null && id.isNotEmpty) businessId = id;
     return businessId;
   }
 
-  static Future<void> clear() async {
+  static void clear() {
     userId = null;
     businessId = null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kCachedBusinessIdKey);
-    } catch (_) {}
   }
 }
-
