@@ -50,11 +50,19 @@ MoSPAMS = **Mo**torcycle **S**hop **P**arts **A**nd **M**anagement **S**ystem �
 
 ## Commands
 ```bash
-# Flutter
+# Flutter Development & Testing
 flutter run                    # run on device/emulator
-flutter test                   # run tests
-flutter build apk --release    # build APK
-dart analyze                   # type check
+flutter test                   # run tests (specify test file path to avoid hanging)
+dart analyze <file_paths>      # type check targeted files
+
+# Release Builds (See RELEASE_AND_UPDATE_GUIDE.md)
+flutter build web --release --no-wasm-dry-run # build Web release
+flutter build apk --release                   # build Android release APK
+
+# Deployment & GitHub Release
+npx vercel deploy build/web --prod --yes --scope team_K5clGTGnllR07t5KnfzORXJB
+npx vercel alias set <url> dcmotorshop.mospams.shop --scope team_K5clGTGnllR07t5KnfzORXJB
+gh release create v1.x.x MoSPAMS.1.x.apk --title "MoSPAMS v1.x.x" --notes "..."
 
 # Backend
 cd backend
@@ -67,12 +75,15 @@ pytest                         # run tests
 - Blue accent `#2563EB` — confirmed in reference image 4.jpg
 - Isar over sqflite — no SQL boilerplate, reactive streams, better DX
 - Riverpod over Provider/Bloc — compile-safe, testable, code-gen friendly
+- In-App Auto-Update System — queries GitHub Releases + Supabase, provides safe in-place APK updates without data loss (see `RELEASE_AND_UPDATE_GUIDE.md`)
 - FastAPI backend for future multi-device sync; app is fully functional without it
 
 ## Don'ts
+- **CRITICAL DATA SAFETY**: NEVER change `applicationId` (`com.dcmotorcycle.dc_motorcycle_inventory`), signing keys, or call `isar.clear()` during updates — this would wipe client databases!
 - Don't implement features for Mobile without maintaining 100% sync on Web (and vice versa)
 - Don't use `dart:io` or `File` directly in shared UI code — always use `AppImage` or platform conditional loaders
 - Don't use `BuildContext` across async gaps without checking `mounted`
 - Don't call Isar directly in widgets — always via repository
 - Don't hardcode strings — use `AppStrings` constants
 - Don't modify generated files (`*.g.dart`, `*.freezed.dart`)
+

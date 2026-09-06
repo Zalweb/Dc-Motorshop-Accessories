@@ -2,6 +2,13 @@
 
 Format: `[YYYY-MM-DD] phase/feature: description`
 
+## [2026-09-06] v1.2.0: In-App Auto-Update, Responsive Metrics, Category Stock Badges & Full Mobile/Web Parity
+- **In-App Auto-Update & Notification System**: Added background check via GitHub Releases API and Supabase remote config with a 30-minute cooldown cache. Displays an animated `UpdateNotificationBanner` in the shell and an `UpdateDialog` modal. Safe in-place APK upgrades on Android with zero local data loss (Isar, SharedPreferences, and Supabase auth preserved). Manual check button added to More → SYSTEM & UPDATES. Full documentation created in `RELEASE_AND_UPDATE_GUIDE.md`.
+- **Responsive Dashboard Metric Cards**: Replaced rigid card layout in `dashboard_screen.dart` with adaptive padding, compact icon circles, and `FittedBox` dynamic auto-scaling with two-line wrapping so `Items Sold`, `Low Stock`, and `Margin` never truncate on narrow mobile viewports.
+- **Category Stock Health Badges**: Added real-time red count badges on category filter chips (including 'All') displaying the exact count of products at or below the critical stock threshold ($\le 2$).
+- **AppBar Filter & Sort Action**: Moved the products filter & sort button to the header `AppBar` matching `SalesHistoryScreen`, complete with an active filter badge and multi-attribute filter bottom sheet (Stock Health, Brand, Item Type, Sort).
+- **100% Mobile & Web Synchronization**: Unified Flutter Web and Android codebase with platform-safe conditional imports, Isar/Web models, and automatic Vercel production deployment at `https://dcmotorshop.mospams.shop`.
+
 ## [2026-06-27] feature: More page — Advance options, Motion toggle, developer footer
 - more: new "ADVANCE" section — an expandable "Advance account options" card (ExpansionTile) revealing two destructive actions: **Reset Local Data** (clears products/sales/expenses, keeps account + settings) and **Delete account** (erases every local collection then signs out). Both confirm first.
 - more/Appearance: added a **Motion** row (normal Switch, on/off) beneath the Theme picker. `motion_controller.dart` (`motionEnabledProvider`, persisted in prefs as `app_motion_enabled`). When off, `main.dart` swaps in a no-op `PageTransitionsTheme` for instant navigation on every route and sets `MediaQuery.disableAnimations`, so motion is reduced app-wide.

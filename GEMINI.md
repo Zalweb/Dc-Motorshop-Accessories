@@ -27,3 +27,9 @@
 
 5. **Validation Requirement**:
    - Test every change to ensure zero compiler errors on both native and web targets before marking any task as complete.
+
+6. **Data Safety & Release Preservation**:
+   - NEVER modify the Android `applicationId` (`com.dcmotorcycle.dc_motorcycle_inventory`), keystore signing keys, or wipe local Isar databases during updates.
+   - Sideloaded updates MUST be performed via in-place APK upgrades to preserve all client inventory, sales, and settings.
+   - Always follow `RELEASE_AND_UPDATE_GUIDE.md` when bumping versions or deploying new releases.
+

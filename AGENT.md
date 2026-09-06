@@ -223,3 +223,16 @@ backend/
 10. Setup checklist tracks progress with a linear progress bar + percentage.
 11. API calls never block UI — always show local data first, sync in background.
 12. One feature at a time. Build in order: Auth → Onboarding → Products → Sales → Dashboard.
+13. Releases & Updates: Follow `RELEASE_AND_UPDATE_GUIDE.md` for all version bumps, builds, and deploys. Never alter `applicationId`, keys, or wipe Isar databases. In-app updater checks GitHub Releases + Supabase and provides safe in-place upgrades.
+
+---
+
+## In-App Auto-Update & Release Architecture
+- **Version Source of Truth**: `lib/core/constants/app_version.dart` and `pubspec.yaml`
+- **Update Service**: `lib/core/update/app_update_service.dart` (GitHub Releases API + Supabase fallback, 30m cooldown)
+- **Controller**: `lib/core/update/app_update_controller.dart` (`appUpdateControllerProvider`)
+- **SemVer Logic**: `lib/core/update/version_comparator.dart`
+- **UI Widgets**: `UpdateNotificationBanner` (top banner in shell), `UpdateDialog` (full changelog modal), System & Updates card in `MoreScreen`
+- **Action**: Native opens direct APK download for in-place OS install (`update_action_stub.dart`); Web refreshes page (`update_action_web.dart`)
+- **Full Guide**: See [RELEASE_AND_UPDATE_GUIDE.md](RELEASE_AND_UPDATE_GUIDE.md)
+
