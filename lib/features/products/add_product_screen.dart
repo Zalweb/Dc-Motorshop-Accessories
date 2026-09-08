@@ -13,6 +13,8 @@ import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/glass_container.dart';
 import 'manage_variants_screen.dart';
 import 'widgets/variant_builder_widget.dart';
+import '../../core/services/vision/product_vision_service.dart';
+import 'widgets/product_vision_dialog.dart';
 
 /// Navigation payload for the Add Product route.
 class AddProductArgs {
@@ -166,9 +168,189 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (code != null) _barcode.text = code;
   }
 
-  Future<void> _pickImage() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (file != null) setState(() => _imagePath = file.path);
+  Future<void> _scanProductVision({ImageSource? source}) async {
+    final chosenSource = source ??
+        await showModalBottomSheet<ImageSource>(
+          context: context,
+          useRootNavigator: true,
+          backgroundColor: AppColors.bgSurface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Text(
+                      'AI Vision Product Auto-Fill',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    child: Text(
+                      'Take a photo of motorcycle part or label to auto-fill details',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.camera_alt_rounded, color: AppColors.accent),
+                    ),
+                    title: const Text('Take Photo with Camera', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Snap packaging, label, or motorcycle part', style: TextStyle(fontSize: 11)),
+                    onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                  ),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.active.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.photo_library_rounded, color: AppColors.active),
+                    ),
+                    title: const Text('Choose from Gallery / Files', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Pick existing photo from device', style: TextStyle(fontSize: 11)),
+                    onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+    if (chosenSource == null) return;
+
+    try {
+      final file = await ImagePicker().pickImage(
+        source: chosenSource,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+
+      if (!mounted) return;
+
+      // Show analysis progress dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                    SizedBox(width: 16),
+                    Text('Scanning motorcycle part with AI...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final categories = ref.read(categoryListStreamProvider).value?.map((c) => c.name).toList() ?? [];
+      final existingProducts = ref.read(productListStreamProvider).value;
+      final visionResult = await ProductVisionService.parseImage(
+        file,
+        availableCategories: categories,
+        existingProducts: existingProducts,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Dismiss loading
+
+      // Show interactive confirmation sheet
+      final confirmed = await ProductVisionDialog.show(
+        context,
+        initialResult: visionResult,
+        availableCategories: categories,
+      );
+
+      if (confirmed != null && mounted) {
+        setState(() {
+          if (confirmed.name != null && confirmed.name!.isNotEmpty) {
+            _name.text = confirmed.name!;
+          }
+          if (confirmed.brand != null && confirmed.brand!.isNotEmpty) {
+            _brand.text = confirmed.brand!;
+          }
+          if (confirmed.partNumber != null && confirmed.partNumber!.isNotEmpty) {
+            _partNumber.text = confirmed.partNumber!;
+          }
+          if (confirmed.category != null && confirmed.category!.isNotEmpty) {
+            _category = confirmed.category;
+          }
+          if (confirmed.barcode != null && confirmed.barcode!.isNotEmpty) {
+            _barcode.text = confirmed.barcode!;
+          }
+          if (confirmed.sellingPrice != null && confirmed.sellingPrice! > 0) {
+            _selling.text = confirmed.sellingPrice.toString();
+          }
+          if (confirmed.costPrice != null && confirmed.costPrice! > 0) {
+            _cost.text = confirmed.costPrice.toString();
+          }
+          if (confirmed.description != null && confirmed.description!.isNotEmpty) {
+            _description.text = confirmed.description!;
+          }
+          if (confirmed.imagePath != null && confirmed.imagePath!.isNotEmpty) {
+            _imagePath = confirmed.imagePath;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Auto-filled "${_name.text}" from scanned photo!'),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.active,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).maybePop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Vision scan failed: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -322,6 +504,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       appBar: AppBar(
         title: Text(widget.editProduct != null ? 'Edit Product' : 'Add Product'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded, color: AppColors.accent),
+            tooltip: 'AI Vision Auto-Fill',
+            onPressed: () => _scanProductVision(),
+          ),
           if (widget.editProduct != null)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppColors.danger),
@@ -355,34 +542,91 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           children: [
-            // Image + core details.
+            // Image + core details + Vision Auto-Fill CTA
             _FormCard(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
                 children: [
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: _ImageBox(imagePath: _imagePath),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _scanProductVision(),
+                        child: Stack(
+                          children: [
+                            _ImageBox(imagePath: _imagePath),
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _LabeledField(
+                              label: 'Product Name',
+                              required: true,
+                              controller: _name,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Required'
+                                  : null,
+                            ),
+                            const SizedBox(height: 12),
+                            _CategoryDropdown(
+                              categories: categories.map((c) => c.name).toList(),
+                              value: _category,
+                              onChanged: (v) => setState(() => _category = v),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _LabeledField(
-                          label: 'Product Name',
-                          required: true,
-                          controller: _name,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Required'
-                              : null,
+                  const SizedBox(height: 14),
+
+                  // Dedicated AI Vision Auto-Fill Button
+                  InkWell(
+                    onTap: () => _scanProductVision(),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.35),
                         ),
-                        const SizedBox(height: 12),
-                        _CategoryDropdown(
-                          categories: categories.map((c) => c.name).toList(),
-                          value: _category,
-                          onChanged: (v) => setState(() => _category = v),
-                        ),
-                      ],
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.auto_awesome, size: 16, color: AppColors.accent),
+                          SizedBox(width: 8),
+                          Text(
+                            'Scan Part Photo to Auto-Fill Details',
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

@@ -8,7 +8,6 @@ import '../../core/providers.dart';
 import '../../core/router/route_paths.dart';
 import '../../core/services/chatbot/chatbot_engine.dart';
 import '../../core/services/chatbot/chatbot_models.dart';
-import '../../core/services/voice/voice_assistant_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/stock_health.dart';
 import '../../data/models/product.dart';
@@ -24,7 +23,7 @@ class ChatbotModal extends ConsumerStatefulWidget {
   });
 
   /// Displays the interactive chatbot as a responsive dialog on Web/Desktop
-  /// or a modal bottom sheet on Mobile.
+  /// or a modal bottom sheet on Mobile, synced above the navigation bar.
   static Future<void> show(
     BuildContext context, {
     ValueChanged<String>? onSearchApplied,
@@ -53,13 +52,14 @@ class ChatbotModal extends ConsumerStatefulWidget {
     } else {
       return showModalBottomSheet(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: AppColors.bgSurface,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (_) => FractionallySizedBox(
-          heightFactor: 0.88,
+          heightFactor: 0.90,
           child: ChatbotModal(
             onSearchApplied: onSearchApplied,
             initialQuery: initialQuery,
@@ -73,67 +73,84 @@ class ChatbotModal extends ConsumerStatefulWidget {
   ConsumerState<ChatbotModal> createState() => _ChatbotModalState();
 }
 
-class _ChatbotModalState extends ConsumerState<ChatbotModal>
-    with SingleTickerProviderStateMixin {
+class _ChatbotModalState extends ConsumerState<ChatbotModal> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
 
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
   final List<ChatMessage> _messages = [];
-  bool _isListening = false;
-  bool _autoSpeak = false;
-  String _listeningTranscript = '';
-  String? _currentlySpeakingMessageId;
 
-  final List<String> _quickActionChips = [
-    '💰 Today\'s Sales',
-    '📈 Today\'s Profit',
-    '⚠️ Low Stock Alert',
-    '🧮 10% off 1500',
-    '💵 Sukli 1000 - 680',
-    '📦 Motul oil stock',
-    '💸 Today\'s Expenses',
-    '💡 Quick Help',
+  static const List<({String label, String query, IconData icon, String subtitle})> _quickActions = [
+    (
+      label: "Today's Sales",
+      query: "Today's sales",
+      icon: Icons.trending_up_rounded,
+      subtitle: "Revenue, orders & tickets",
+    ),
+    (
+      label: "Today's Profit",
+      query: "Today's profit",
+      icon: Icons.query_stats_rounded,
+      subtitle: "Gross & net margins",
+    ),
+    (
+      label: "Low Stock Alert",
+      query: "Low stock alert",
+      icon: Icons.warning_amber_rounded,
+      subtitle: "Items below reorder point",
+    ),
+    (
+      label: "10% off 1500",
+      query: "10% off 1500",
+      icon: Icons.percent_rounded,
+      subtitle: "Quick discount calculation",
+    ),
+    (
+      label: "Sukli 1000 - 680",
+      query: "sukli 1000 - 680",
+      icon: Icons.payments_outlined,
+      subtitle: "Change calculator",
+    ),
+    (
+      label: "Motul Stock",
+      query: "Motul oil stock",
+      icon: Icons.inventory_2_outlined,
+      subtitle: "Find oil availability",
+    ),
+    (
+      label: "Today's Expenses",
+      query: "Today's expenses",
+      icon: Icons.receipt_long_rounded,
+      subtitle: "Recorded store costs",
+    ),
+    (
+      label: "Quick Help",
+      query: "Help",
+      icon: Icons.help_outline_rounded,
+      subtitle: "Commands & syntax guide",
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.28).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
 
     // Initial greeting message
     _messages.add(
       ChatMessage(
         id: 'welcome',
         text:
-            'Hello! I am your DC Motorshop AI Chatbot. '
-            'I can calculate discounts and change, check parts stock, alert you on low inventory, '
-            'and summarize today\'s sales and profit.\n\nHow can I help you right now?',
+            'Hello! I am your DC Motorshop AI Assistant.\n'
+            'I can compute discounts and customer change, check spare parts stock, alert on low inventory, '
+            'and calculate today\'s sales and profit.\n\nTap any suggested prompt below or type your question:',
         isUser: false,
         timestamp: DateTime.now(),
         intentType: ChatbotIntentType.greeting,
-        actionChips: [
-          '💰 Today\'s Sales',
-          '⚠️ Low Stock Alert',
-          '🧮 10% off 1500',
-          '📦 Check Product Stock',
-        ],
+        actionChips: const [],
       ),
     );
 
-    final voiceService = ref.read(voiceAssistantServiceProvider);
-    voiceService.isSpeakingNotifier.addListener(_onSpeakingChanged);
-
-    // If an initial query was passed, run it
+    // If an initial query was passed, execute it
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleSendMessage(widget.initialQuery!);
@@ -141,26 +158,11 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
     }
   }
 
-  void _onSpeakingChanged() {
-    if (mounted) {
-      final isSpeaking = ref.read(voiceAssistantServiceProvider).isSpeaking;
-      if (!isSpeaking && _currentlySpeakingMessageId != null) {
-        setState(() {
-          _currentlySpeakingMessageId = null;
-        });
-      }
-    }
-  }
-
   @override
   void dispose() {
-    _pulseController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
-    ref.read(voiceAssistantServiceProvider).isSpeakingNotifier.removeListener(_onSpeakingChanged);
-    ref.read(voiceAssistantServiceProvider).stopListening();
-    ref.read(voiceAssistantServiceProvider).stopSpeaking();
     super.dispose();
   }
 
@@ -211,85 +213,6 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
       _messages.add(botResponse);
     });
     _scrollToBottom();
-
-    if (_autoSpeak) {
-      _speakMessage(botResponse);
-    }
-  }
-
-  Future<void> _startVoiceListening() async {
-    final service = ref.read(voiceAssistantServiceProvider);
-    setState(() {
-      _isListening = true;
-      _listeningTranscript = '';
-    });
-
-    final success = await service.startListening(
-      onResult: (text, isFinal) {
-        setState(() {
-          _listeningTranscript = text;
-          _inputController.text = text;
-        });
-
-        if (isFinal && text.trim().isNotEmpty) {
-          _stopVoiceListening(shouldSubmit: true);
-        }
-      },
-      onError: (error) {
-        setState(() {
-          _isListening = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Voice recognition: $error'),
-              backgroundColor: AppColors.danger,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      },
-    );
-
-    if (!success && mounted) {
-      setState(() {
-        _isListening = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Microphone not available or permission denied.'),
-          backgroundColor: AppColors.danger,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  Future<void> _stopVoiceListening({bool shouldSubmit = false}) async {
-    if (!_isListening) return;
-    final text = _listeningTranscript.trim();
-    setState(() {
-      _isListening = false;
-      _listeningTranscript = '';
-    });
-    final service = ref.read(voiceAssistantServiceProvider);
-    await service.stopListening();
-
-    if (shouldSubmit && text.isNotEmpty) {
-      _handleSendMessage(text);
-    }
-  }
-
-  void _speakMessage(ChatMessage message) async {
-    final service = ref.read(voiceAssistantServiceProvider);
-    if (_currentlySpeakingMessageId == message.id) {
-      await service.stopSpeaking();
-      setState(() => _currentlySpeakingMessageId = null);
-      return;
-    }
-
-    setState(() => _currentlySpeakingMessageId = message.id);
-    await service.speak(message.text);
   }
 
   void _copyToClipboard(String text, String label) {
@@ -317,385 +240,265 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDesktop = MediaQuery.sizeOf(context).width >= 800;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPadding = bottomInset > 0
+        ? bottomInset + 8
+        : (MediaQuery.paddingOf(context).bottom + 10);
+
     // Keep streams active while modal is mounted
     ref.watch(productListStreamProvider);
     ref.watch(saleListStreamProvider);
     ref.watch(expenseListStreamProvider);
 
-    return SafeArea(
-      child: Column(
-        children: [
-          // Drag handle on mobile
-          if (MediaQuery.sizeOf(context).width < 800) ...[
-            const SizedBox(height: 10),
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.border.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(3),
-                ),
+    return Column(
+      children: [
+        // Drag handle on mobile
+        if (!isDesktop) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4.5,
+              decoration: BoxDecoration(
+                color: AppColors.border.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
-          ],
-
-          // ── Chat Header ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.accent, Color(0xFF00E5FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.smart_toy_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Row(
-                        children: [
-                          Text(
-                            'DC Motorshop AI',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          SizedBox(width: 6),
-                          _AiBadge(),
-                        ],
-                      ),
-                      Text(
-                        'Inventory • Sales • Calculator • Voice',
-                        style: TextStyle(
-                          color: AppColors.textSecondary.withValues(alpha: 0.9),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Sound Auto-TTS Toggle
-                IconButton(
-                  tooltip: _autoSpeak
-                      ? 'Auto-Voice: Enabled (Tap to mute)'
-                      : 'Auto-Voice: Muted (Tap to speak replies)',
-                  icon: Icon(
-                    _autoSpeak
-                        ? Icons.volume_up_rounded
-                        : Icons.volume_off_rounded,
-                    color: _autoSpeak ? AppColors.accent : AppColors.textSecondary,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _autoSpeak = !_autoSpeak;
-                    });
-                    if (!_autoSpeak) {
-                      ref.read(voiceAssistantServiceProvider).stopSpeaking();
-                    }
-                  },
-                ),
-
-                // Clear Chat History
-                IconButton(
-                  tooltip: 'Clear Chat History',
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppColors.textSecondary,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _messages.clear();
-                      _messages.add(
-                        ChatMessage(
-                          id: 'welcome_cleared',
-                          text:
-                              'Chat reset! Ask me anything about stock, sales, calculations, or discounts.',
-                          isUser: false,
-                          timestamp: DateTime.now(),
-                          intentType: ChatbotIntentType.greeting,
-                        ),
-                      );
-                    });
-                  },
-                ),
-
-                // Close Button
-                IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textSecondary,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+        ],
 
-          // ── Chat Messages Stream ──────────────────────────────────────
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
+        // ── Chat Header ───────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.accent, Color(0xFF00E5FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.smart_toy_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'DC Motorshop AI',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        _AiBadge(),
+                      ],
+                    ),
+                    Text(
+                      'POS Assistant • Sales • Stock • Calculator',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Clear Chat History
+              IconButton(
+                tooltip: 'Clear Chat History',
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _messages.clear();
+                    _messages.add(
+                      ChatMessage(
+                        id: 'welcome_cleared',
+                        text:
+                            'Chat reset! Ask me anything about stock, sales, calculations, or discounts.',
+                        isUser: false,
+                        timestamp: DateTime.now(),
+                        intentType: ChatbotIntentType.greeting,
+                      ),
+                    );
+                  });
+                },
+              ),
+
+              // Close Button
+              IconButton(
+                tooltip: 'Close',
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: AppColors.textSecondary,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+
+        // ── Chat Messages Stream ──────────────────────────────────────
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: _messages.length + (_messages.length <= 1 ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index < _messages.length) {
                 final msg = _messages[index];
                 return _buildMessageBubble(msg);
-              },
-            ),
+              } else {
+                return _buildWelcomePromptCards();
+              }
+            },
           ),
+        ),
 
-          // ── Live Speech Listening Indicator ───────────────────────────
-          if (_isListening)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _pulseAnimation.value,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: AppColors.danger,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _listeningTranscript.isEmpty
-                          ? 'Listening... Speak part name or math...'
-                          : '"$_listeningTranscript"',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.stop_rounded,
-                        color: AppColors.danger, size: 20),
-                    onPressed: () => _stopVoiceListening(shouldSubmit: true),
-                    tooltip: 'Finish speaking',
-                  ),
-                ],
-              ),
-            ),
-
-          // ── Quick Suggestions Bar ─────────────────────────────────────
-          SizedBox(
+        // ── Follow-Up Suggestions Bar (Active Only During Chat) ───────
+        if (_messages.length > 1) ...[
+          Container(
             height: 38,
+            margin: const EdgeInsets.only(bottom: 6),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _quickActionChips.length,
+              itemCount: _quickActions.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final chip = _quickActionChips[index];
-                return InkWell(
-                  onTap: () {
-                    // Strip emoji for query if necessary or send raw
-                    final cleanQuery = chip.replaceAll(
-                        RegExp(r'[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]',
-                            unicode: true),
-                        '').trim();
-                    _handleSendMessage(cleanQuery);
-                  },
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppColors.bgSurface2,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Text(
-                      chip,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                final item = _quickActions[index];
+                return ActionChip(
+                  avatar: Icon(item.icon, size: 14, color: AppColors.accent),
+                  label: Text(
+                    item.label,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  backgroundColor: AppColors.bgSurface2,
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  onPressed: () => _handleSendMessage(item.query),
                 );
               },
             ),
           ),
-          const SizedBox(height: 8),
-
-          // ── Input Row (Text + Mic + Send) ──────────────────────────────
-          Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 4,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 12,
-            ),
-            child: Row(
-              children: [
-                // Text Input Field
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.bgSurface2,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: _isListening
-                            ? AppColors.accent
-                            : theme.colorScheme.outlineVariant
-                                .withValues(alpha: 0.3),
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 18,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _inputController,
-                            focusNode: _inputFocusNode,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 14,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText: 'Ask or calculate (e.g. 10% off 1500)...',
-                              hintStyle: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding:
-                                  EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onSubmitted: _handleSendMessage,
-                          ),
-                        ),
-                        if (_inputController.text.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 16, color: AppColors.textSecondary),
-                            onPressed: () {
-                              _inputController.clear();
-                              setState(() {});
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Microphone Button
-                GestureDetector(
-                  onTap: () {
-                    if (_isListening) {
-                      _stopVoiceListening(shouldSubmit: true);
-                    } else {
-                      _startVoiceListening();
-                    }
-                  },
-                  child: AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _isListening ? _pulseAnimation.value : 1.0,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _isListening
-                                ? AppColors.danger
-                                : AppColors.bgSurface2,
-                            border: Border.all(
-                              color: _isListening
-                                  ? AppColors.danger
-                                  : AppColors.border,
-                            ),
-                          ),
-                          child: Icon(
-                            _isListening
-                                ? Icons.mic_rounded
-                                : Icons.mic_none_rounded,
-                            color: _isListening
-                                ? Colors.white
-                                : AppColors.accent,
-                            size: 22,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Send Button
-                IconButton.filled(
-                  icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(44, 44),
-                  ),
-                  onPressed: () => _handleSendMessage(_inputController.text),
-                ),
-              ],
-            ),
-          ),
         ],
-      ),
+
+        // ── Input Row (Pure Text Chat, Synced with Nav Bar) ───────────
+        Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 4,
+            bottom: bottomPadding,
+          ),
+          child: Row(
+            children: [
+              // Text Input Field
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.bgSurface2,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.3),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          focusNode: _inputFocusNode,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Ask or calculate (e.g. 10% off 1500)...',
+                            hintStyle: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onSubmitted: _handleSendMessage,
+                        ),
+                      ),
+                      if (_inputController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear_rounded,
+                              size: 16, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _inputController.clear();
+                            setState(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Send Button
+              IconButton.filled(
+                icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(44, 44),
+                ),
+                onPressed: () => _handleSendMessage(_inputController.text),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -745,8 +548,6 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
     }
 
     // Assistant Message
-    final isSpeakingThis = _currentlySpeakingMessageId == msg.id;
-
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -772,7 +573,7 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Bot label & speech actions
+                  // Bot label & copy action
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -791,55 +592,24 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
                           ),
                         ],
                       ),
-                      Row(
-                        children: [
-                          // Speaker button
-                          InkWell(
-                            onTap: () => _speakMessage(msg),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(
-                                isSpeakingThis
-                                    ? Icons.volume_up_rounded
-                                    : Icons.volume_up_outlined,
-                                size: 16,
-                                color: isSpeakingThis
-                                    ? AppColors.accent
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
+                      InkWell(
+                        onTap: () => _copyToClipboard(msg.text, 'Reply'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.copy_rounded,
+                            size: 14,
+                            color: AppColors.textSecondary,
                           ),
-                          const SizedBox(width: 4),
-                          // Copy text button
-                          InkWell(
-                            onTap: () => _copyToClipboard(msg.text, 'Reply'),
-                            borderRadius: BorderRadius.circular(12),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4),
-                              child: Icon(
-                                Icons.copy_rounded,
-                                size: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
 
-                  // Main Text
-                  Text(
-                    msg.text,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      height: 1.4,
-                    ),
-                  ),
+                  // Main Text formatted cleanly
+                  _buildFormattedText(msg.text),
 
                   // ── Specialized Cards ─────────────────────────────────
                   if (msg.calculatorResult != null) ...[
@@ -861,46 +631,240 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal>
             ),
 
             // Action chips under bot reply
-            if (msg.actionChips.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: msg.actionChips.map((chip) {
-                  return InkWell(
-                    onTap: () {
-                      final cleanQuery = chip.replaceAll(
-                          RegExp(r'[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]',
-                              unicode: true),
-                          '').trim();
-                      _handleSendMessage(cleanQuery);
-                    },
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: AppColors.accent.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        chip,
-                        style: const TextStyle(
-                          color: AppColors.accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
+            if (msg.actionChips.isNotEmpty) _buildActionChips(msg.actionChips),
           ],
         ),
       ),
+    );
+  }
+
+  /// Beautifully arranged prompt cards for the welcome state.
+  Widget _buildWelcomePromptCards() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Text(
+              'QUICK SUGGESTIONS',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              mainAxisExtent: 76,
+            ),
+            itemCount: _quickActions.length,
+            itemBuilder: (context, index) {
+              final item = _quickActions[index];
+              return InkWell(
+                onTap: () => _handleSendMessage(item.query),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgSurface2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(item.icon, size: 16, color: AppColors.accent),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionChips(List<String> chips) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: chips.map((chip) {
+            // Clean emoji from label if present
+            final cleanLabel = chip.replaceAll(
+              RegExp(r'[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]', unicode: true),
+              '',
+            ).trim();
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                avatar: const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 13,
+                  color: AppColors.accent,
+                ),
+                label: Text(
+                  cleanLabel.isNotEmpty ? cleanLabel : chip,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                backgroundColor: AppColors.bgSurface2,
+                side: const BorderSide(color: AppColors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onPressed: () => _handleSendMessage(cleanLabel),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormattedText(String text) {
+    final lines = text.split('\n');
+    final widgets = <Widget>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final trimmed = line.trim();
+
+      if (trimmed.isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+        continue;
+      }
+
+      // Bullet points (• or - or *)
+      if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        final content = trimmed.startsWith('•')
+            ? trimmed.substring(1).trim()
+            : trimmed.substring(2).trim();
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 6, right: 8),
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    content,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Header lines (starts with emoji or ends with :)
+      final isEmojiHeader = RegExp(
+        r'^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]',
+        unicode: true,
+      ).hasMatch(trimmed);
+      if (isEmojiHeader || (trimmed.endsWith(':') && trimmed.length < 40)) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              trimmed,
+              style: const TextStyle(
+                color: AppColors.accent,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Regular text
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            line,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w400,
+              height: 1.45,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
     );
   }
 
