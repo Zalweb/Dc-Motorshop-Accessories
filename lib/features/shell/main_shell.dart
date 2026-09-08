@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +29,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     ref.listen(appUpdateControllerProvider, (_, next) {
+      if (kIsWeb) return;
       final info = next.value;
       if (info != null && info.hasUpdate && info.isMandatory && !_checkedMandatory) {
         _checkedMandatory = true;
@@ -93,6 +95,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       extendBody: false,
       body: content,
       bottomNavigationBar: AppBottomNav(

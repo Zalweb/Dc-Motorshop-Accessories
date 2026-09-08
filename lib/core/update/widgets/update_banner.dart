@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -47,6 +48,7 @@ class _UpdateNotificationBannerState
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) return const SizedBox.shrink();
     final updateAsync = ref.watch(appUpdateControllerProvider);
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;

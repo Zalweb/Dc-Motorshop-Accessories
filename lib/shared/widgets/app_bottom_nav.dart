@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:iconoir_flutter/iconoir_flutter.dart' hide Text, List;
 import 'app_pressable.dart';
-import 'glass_container.dart';
 
 class BottomNavSpec {
   const BottomNavSpec(this.label, this.iconBuilder);
@@ -35,26 +34,29 @@ class AppBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: GlassContainer(
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2)),
-        child: SafeArea(
-          top: false,
-          bottom: false,
-          child: SizedBox(
-            height: 72,
-            child: Row(
-              children: List.generate(_navItems.length, (i) {
-                if (i == _newSaleIndex) return _CenterFab(onTap: () => onTap(i));
-                return _NavItem(
-                  spec: _navItems[i],
-                  selected: i == currentIndex,
-                  onTap: () => onTap(i),
-                );
-              }),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.18),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: List.generate(_navItems.length, (i) {
+              if (i == _newSaleIndex) return _CenterFab(onTap: () => onTap(i));
+              return _NavItem(
+                spec: _navItems[i],
+                selected: i == currentIndex,
+                onTap: () => onTap(i),
+              );
+            }),
           ),
         ),
       ),
@@ -83,18 +85,22 @@ class _NavItem extends StatelessWidget {
       child: AppPressable(
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               spec.iconBuilder(color),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 spec.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  letterSpacing: 0.1,
                 ),
               ),
             ],
@@ -119,20 +125,20 @@ class _CenterFab extends StatelessWidget {
         child: AppPressable(
           onTap: onTap,
           child: Container(
-            width: 56,
-            height: 56,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: primary,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: primary.withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: primary.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Center(child: Cart(color: Colors.white, width: 26, height: 26)),
+            child: const Center(child: Cart(color: Colors.white, width: 22, height: 22)),
           ),
         ),
       ),

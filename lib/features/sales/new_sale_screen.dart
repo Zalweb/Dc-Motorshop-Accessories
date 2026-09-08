@@ -320,15 +320,6 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                 focusNode: _searchFocusNode,
                 onChanged: (v) => setState(() => _query = v),
                 onSubmitted: (code) => _handleBarcodeSubmitted(code, products),
-                onVoicePressed: () {
-                  ChatbotModal.show(
-                    context,
-                    onSearchApplied: (query) {
-                      _searchController.text = query;
-                      setState(() => _query = query);
-                    },
-                  );
-                },
                 trailing: IconButton.filled(
                   onPressed: () => _scanToAdd(products),
                   icon: const Icon(Icons.qr_code_scanner, size: 20),

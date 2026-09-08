@@ -361,15 +361,6 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   controller: _searchController,
                   hint: 'Search products...',
                   onChanged: (v) => setState(() => _query = v),
-                  onVoicePressed: () {
-                    ChatbotModal.show(
-                      context,
-                      onSearchApplied: (query) {
-                        _searchController.text = query;
-                        setState(() => _query = query);
-                      },
-                    );
-                  },
                 ),
               ),
               if (activeFilterCount > 0)

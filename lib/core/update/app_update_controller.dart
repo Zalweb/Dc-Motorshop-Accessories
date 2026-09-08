@@ -11,11 +11,14 @@ class AppUpdateNotifier extends AsyncNotifier<AppUpdateInfo?> {
 
   @override
   Future<AppUpdateInfo?> build() async {
+    // Web is continuously updated via cloud hosting; bypass update check
+    if (kIsWeb) return null;
     // Check for updates on startup using cache cooldown
     return _fetchUpdate(force: false);
   }
 
   Future<AppUpdateInfo?> _fetchUpdate({required bool force}) async {
+    if (kIsWeb) return null;
     final service = ref.read(appUpdateServiceProvider);
     final updateInfo = await service.checkForUpdate(force: force);
     if (updateInfo == null) return null;
@@ -27,6 +30,7 @@ class AppUpdateNotifier extends AsyncNotifier<AppUpdateInfo?> {
   /// Checks for available updates.
   /// Set [force] to true to bypass cache and dismissal check (e.g. manual user refresh).
   Future<AppUpdateInfo?> checkForUpdate({bool force = false}) async {
+    if (kIsWeb) return null;
     state = const AsyncValue.loading();
     try {
       final updateInfo = await _fetchUpdate(force: force);

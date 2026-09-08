@@ -40,6 +40,10 @@ class AppUpdateService {
   ///
   /// Set [force] to true to bypass cache (e.g. when triggered by user action).
   Future<AppUpdateInfo?> checkForUpdate({bool force = false}) async {
+    // Web is continuously updated via live cloud hosting (Vercel);
+    // binary update detection is reserved strictly for native Android & iOS clients.
+    if (kIsWeb) return null;
+
     // Check cache cooldown if not forcing
     if (!force && _cachedInfo != null && _lastCheckTime != null) {
       final elapsed = DateTime.now().difference(_lastCheckTime!);

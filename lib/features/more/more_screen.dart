@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -889,6 +890,23 @@ class _AppUpdateCardState extends ConsumerState<_AppUpdateCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+
+    if (kIsWeb) {
+      return GlassContainer(
+        borderRadius: BorderRadius.circular(16),
+        child: ListTile(
+          leading: Icon(Icons.cloud_done_rounded, color: primary),
+          title: Text('Software Version', style: AppTextStyles.body),
+          subtitle: Text(
+            '${AppVersion.displayVersion} · Live Cloud Production',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
     final updateState = ref.watch(appUpdateControllerProvider);
     final info = updateState.value;
     final hasUpdate = info?.hasUpdate ?? false;
