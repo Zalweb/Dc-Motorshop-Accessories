@@ -1,4 +1,4 @@
-﻿name: Build iOS IPA (Sideloadable)
+name: Build iOS IPA (Sideloadable)
 
 on:
   workflow_dispatch:
@@ -31,14 +31,31 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS App (Unsigned for Sideloading)
+      - name: Build iOS App (Release Unsigned)
         run: flutter build ios --release --no-codesign
+
+      - name: Ad-Hoc Code Sign Frameworks & Runner.app
+        run: |
+          echo "=== Ad-Hoc Signing Frameworks ==="
+          find build/ios/iphoneos/Runner.app/Frameworks -type d -name "*.framework" 2>/dev/null | while read f; do
+            echo "Signing framework: $f"
+            codesign --force --sign - --timestamp=none "$f" || true
+          done
+          find build/ios/iphoneos/Runner.app/Frameworks -name "*.dylib" 2>/dev/null | while read d; do
+            echo "Signing dylib: $d"
+            codesign --force --sign - --timestamp=none "$d" || true
+          done
+
+          echo "=== Ad-Hoc Signing Main App Bundle ==="
+          codesign --force --deep --sign - --timestamp=none build/ios/iphoneos/Runner.app
+          codesign -dv build/ios/iphoneos/Runner.app
 
       - name: Package Runner.app into Sideloadable IPA
         run: |
+          rm -rf Payload MoSPAMS.ipa
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r MoSPAMS.ipa Payload
+          /usr/bin/ditto build/ios/iphoneos/Runner.app Payload/Runner.app
+          zip -qry MoSPAMS.ipa Payload
           ls -lh MoSPAMS.ipa
 
       - name: Upload IPA Artifact

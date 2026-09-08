@@ -1,4 +1,4 @@
-﻿# iOS Installation Guide (iPhone 13 — No Mac, 100% Free)
+# iOS Installation Guide (iPhone 13 — No Mac, 100% Free)
 
 This guide explains how to install **DC Motorcycle Inventory (MoSPAMS)** onto an **iPhone 13** from a **Windows PC** without owning a Mac and without paying for an Apple Developer account ($0).
 
@@ -34,10 +34,15 @@ Download the compiled `MoSPAMS.ipa` file:
 
 ## Step 4: Sign and Install the App
 1. Drag and drop the downloaded `MoSPAMS.ipa` file into the large **IPA icon** area on Sideloadly.
-2. Under **Apple ID**, enter your personal Apple ID email address.
-3. Click the **"Start"** button at the bottom.
-4. If prompted, enter your Apple ID password (this is used solely by Apple servers to sign the binary with your free personal certificate).
-5. Wait ~30–60 seconds. Sideloadly will output `Done.` and the **MoSPAMS** app icon will appear on your iPhone home screen!
+2. Under **Apple account**, enter your personal Apple ID email address (e.g. `yourname@icloud.com` or `yourname@gmail.com`).
+   > ⚠️ **CRITICAL**: Do NOT leave the Apple account field blank, and do NOT use "Normal Install" or "Ad-hoc sign" mode. Sideloadly MUST be in **"Apple ID Sideload"** mode so it signs the app with your personal developer certificate.
+3. Click **"Advanced Options"** in Sideloadly:
+   - Ensure **Signing Mode** is set to **"Apple ID Sideload"**.
+   - Check **"Change bundle ID"** and set it to: `com.zalweb.dcmotorshop` (or any custom identifier). *This prevents bundle ID conflicts with Apple's free developer provisioning service.*
+   - Ensure **"Try unhiding app"** is checked.
+4. Click the **"Start"** button at the bottom.
+5. If prompted, enter your Apple ID password and 2-Factor Authentication (2FA) code sent to your iPhone.
+6. Wait ~30–60 seconds as Sideloadly signs each framework and uploads the app. When it displays `Done.`, the **MoSPAMS** app icon will appear on your iPhone home screen!
 
 ---
 
@@ -74,3 +79,15 @@ Open **MoSPAMS** on your iPhone 13. You have full native access to:
 * Apple allows free personal Apple IDs to run sideloaded apps for **7 days**.
 * **Automatic Renewal**: When your iPhone 13 is on the same Wi-Fi network as your PC with Sideloadly running in the background, Sideloadly will automatically refresh the app wirelessly before it expires.
 * Alternatively, for an un-expiring setup that requires zero cables, remember that **Safari $\rightarrow$ Add to Home Screen** from `https://dcmotorshop.mospams.shop` runs in full-screen standalone mode and never expires.
+
+---
+
+## 🛠️ Troubleshooting
+
+### Error: `ApplicationVerificationFailed : 0xe800801c (No code signature found)`
+If you see this error:
+1. **Download the latest `MoSPAMS.ipa`**: The IPA has been updated with pre-initialized ad-hoc signatures and preserved framework symlinks.
+2. **Verify Apple account**: Make sure you entered your personal Apple ID email under the **"Apple account"** field at the top of Sideloadly. Sideloadly requires this to fetch signing certificates from Apple.
+3. **Set Signing Mode**: In Sideloadly's **Advanced Options**, verify that **Signing Mode** is set to **"Apple ID Sideload"** (not "Normal Install" or "Export").
+4. **Change Bundle ID**: In **Advanced Options**, check **"Change bundle ID"** and enter `com.zalweb.dcmotorshop` to prevent conflicts with Apple's developer provisioning.
+5. **Install Standalone iTunes/iCloud**: If Sideloadly cannot communicate with Apple drivers, install the standard desktop (non-Microsoft Store) versions of iTunes and iCloud for Windows.
