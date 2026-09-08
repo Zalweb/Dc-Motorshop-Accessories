@@ -24,7 +24,10 @@ class VoiceAssistantService {
   /// Reactive notifier for TTS speaking status
   final ValueNotifier<bool> isSpeakingNotifier = ValueNotifier<bool>(false);
 
-  bool get isListening => _speech.isListening;
+  /// Reactive notifier for speech listening status
+  final ValueNotifier<bool> isListeningNotifier = ValueNotifier<bool>(false);
+
+  bool get isListening => isListeningNotifier.value || _speech.isListening;
   bool get isSpeaking => isSpeakingNotifier.value;
   bool get isAvailable => _isSpeechInitialized;
 
@@ -33,8 +36,17 @@ class VoiceAssistantService {
 
     try {
       _isSpeechInitialized = await _speech.initialize(
-        onError: (val) => debugPrint('VoiceAssistant STT Error: ${val.errorMsg}'),
-        onStatus: (val) => debugPrint('VoiceAssistant STT Status: $val'),
+        onError: (val) {
+          isListeningNotifier.value = false;
+          debugPrint('VoiceAssistant STT Error: ${val.errorMsg}');
+        },
+        onStatus: (val) {
+          final listening = val == 'listening';
+          if (isListeningNotifier.value != listening) {
+            isListeningNotifier.value = listening;
+          }
+          debugPrint('VoiceAssistant STT Status: $val');
+        },
         debugLogging: kDebugMode,
       );
 
@@ -44,6 +56,7 @@ class VoiceAssistantService {
       return _isSpeechInitialized;
     } catch (e) {
       debugPrint('VoiceAssistant init failed: $e');
+      isListeningNotifier.value = false;
       _isSpeechInitialized = false;
       return false;
     }
@@ -58,7 +71,7 @@ class VoiceAssistantService {
       await _tts.setPitch(1.0);
 
       // On iOS, wait for completion
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
         await _tts.setSharedInstance(true);
         await _tts.setIosAudioCategory(
           IosTextToSpeechAudioCategory.ambientSolo,
@@ -93,9 +106,11 @@ class VoiceAssistantService {
   Future<bool> startListening({
     required void Function(String text, bool isFinal) onResult,
     void Function(String error)? onError,
+    ListenMode listenMode = ListenMode.search,
   }) async {
     final available = await initialize();
     if (!available) {
+      isListeningNotifier.value = false;
       onError?.call('Microphone or Speech Recognition not available');
       return false;
     }
@@ -104,20 +119,25 @@ class VoiceAssistantService {
     await stopSpeaking();
 
     try {
+      isListeningNotifier.value = true;
       await _speech.listen(
         onResult: (result) {
+          if (result.finalResult) {
+            isListeningNotifier.value = false;
+          }
           onResult(result.recognizedWords, result.finalResult);
         },
         listenOptions: SpeechListenOptions(
-          listenMode: ListenMode.confirmation,
+          listenMode: listenMode,
           cancelOnError: true,
           partialResults: true,
           pauseFor: const Duration(seconds: 3),
-          listenFor: const Duration(seconds: 15),
+          listenFor: const Duration(seconds: 20),
         ),
       );
       return true;
     } catch (e) {
+      isListeningNotifier.value = false;
       debugPrint('VoiceAssistant listen error: $e');
       onError?.call(e.toString());
       return false;
@@ -126,6 +146,7 @@ class VoiceAssistantService {
 
   /// Stops speech listening.
   Future<void> stopListening() async {
+    isListeningNotifier.value = false;
     if (_speech.isListening) {
       await _speech.stop();
     }
@@ -133,6 +154,7 @@ class VoiceAssistantService {
 
   /// Cancels listening immediately.
   Future<void> cancelListening() async {
+    isListeningNotifier.value = false;
     await _speech.cancel();
   }
 
@@ -147,6 +169,7 @@ class VoiceAssistantService {
     // Replace ₱ with pesos
     cleaned = cleaned.replaceAll('₱', 'pesos ');
     // Remove bullets and leading markers
+    cleaned = cleaned.replaceAll('•', ' ');
     cleaned = cleaned.replaceAll(RegExp(r'^[•\-\*]\s*', multiLine: true), '');
     // Clean markdown formatting
     cleaned = cleaned.replaceAll(RegExp(r'[\*_]{1,2}'), '');
@@ -188,8 +211,13 @@ class VoiceAssistantService {
   }
 
   void dispose() {
-    _speech.stop();
-    _tts.stop();
+    try {
+      _speech.stop().catchError((_) {});
+    } catch (_) {}
+    try {
+      _tts.stop().catchError((_) {});
+    } catch (_) {}
     isSpeakingNotifier.dispose();
+    isListeningNotifier.dispose();
   }
 }

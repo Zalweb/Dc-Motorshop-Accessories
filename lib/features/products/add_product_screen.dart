@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,8 +15,9 @@ import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/glass_container.dart';
 import 'manage_variants_screen.dart';
 import 'widgets/variant_builder_widget.dart';
-import '../../core/services/vision/product_vision_service.dart';
 import 'widgets/product_vision_dialog.dart';
+import 'widgets/product_vision_scanning_modal.dart';
+import '../../core/services/vision/ocr/part_number_ocr_scanner.dart';
 
 /// Navigation payload for the Add Product route.
 class AddProductArgs {
@@ -168,6 +171,96 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (code != null) _barcode.text = code;
   }
 
+  Future<void> _pickProductPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: AppColors.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Text(
+                  'Product Photo',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: Text(
+                  'Set or change the official photo for this product',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.accent),
+                ),
+                title: const Text('Take Photo with Camera', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.active.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.active),
+                ),
+                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              if (_imagePath != null && _imagePath!.isNotEmpty)
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+                  ),
+                  title: const Text('Remove Product Photo', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    setState(() => _imagePath = null);
+                    Navigator.pop(ctx);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null) {
+      final file = await ImagePicker().pickImage(source: source, imageQuality: 85);
+      if (file != null && mounted) {
+        final bytes = await file.readAsBytes();
+        final path = kIsWeb ? 'data:image/jpeg;base64,${base64Encode(bytes)}' : file.path;
+        setState(() => _imagePath = path);
+      }
+    }
+  }
+
   Future<void> _scanProductVision({ImageSource? source}) async {
     final chosenSource = source ??
         await showModalBottomSheet<ImageSource>(
@@ -246,44 +339,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       if (!mounted) return;
 
-      // Show analysis progress dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const PopScope(
-          canPop: false,
-          child: Center(
-            child: Card(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                    SizedBox(width: 16),
-                    Text('Scanning motorcycle part with AI...'),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-
       final categories = ref.read(categoryListStreamProvider).value?.map((c) => c.name).toList() ?? [];
       final existingProducts = ref.read(productListStreamProvider).value;
-      final visionResult = await ProductVisionService.parseImage(
-        file,
-        availableCategories: categories,
+
+      // Show dedicated sleek scanning animation modal while analyzing packaging & label
+      final visionResult = await ProductVisionScanningModal.show(
+        context,
+        imageFile: file,
+        categories: categories,
         existingProducts: existingProducts,
       );
 
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Dismiss loading
+      if (visionResult == null || !mounted) return;
 
       // Show interactive confirmation sheet
       final confirmed = await ProductVisionDialog.show(
@@ -318,9 +385,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           if (confirmed.description != null && confirmed.description!.isNotEmpty) {
             _description.text = confirmed.description!;
           }
-          if (confirmed.imagePath != null && confirmed.imagePath!.isNotEmpty) {
-            _imagePath = confirmed.imagePath;
-          }
+          // Note: We deliberately do NOT assign confirmed.imagePath to _imagePath.
+          // The scanned packaging photo is used only to extract details, not saved as product photo.
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -550,7 +616,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       GestureDetector(
-                        onTap: () => _scanProductVision(),
+                        onTap: () => _pickProductPhoto(),
                         child: Stack(
                           children: [
                             _ImageBox(imagePath: _imagePath),
@@ -667,7 +733,25 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     children: [
                       Expanded(
                         child: _LabeledField(
-                            label: 'Part number', controller: _partNumber),
+                          label: 'Part number',
+                          controller: _partNumber,
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                            tooltip: 'Scan Part # (Camera OCR)',
+                            onPressed: () async {
+                              final code = await PartNumberOcrScanner.scan(
+                                context,
+                                title: 'Scan Part Number',
+                                subtitle: 'Point camera at part label or packaging',
+                              );
+                              if (code != null && mounted) {
+                                setState(() {
+                                  _partNumber.text = code;
+                                });
+                              }
+                            },
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -919,6 +1003,7 @@ class _LabeledField extends StatelessWidget {
     this.keyboardType,
     this.inputFormatters,
     this.validator,
+    this.suffixIcon,
   });
 
   final String label;
@@ -928,6 +1013,7 @@ class _LabeledField extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final String? Function(String?)? validator;
+  final Widget? suffixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -949,6 +1035,11 @@ class _LabeledField extends StatelessWidget {
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           validator: validator,
+          decoration: suffixIcon != null
+              ? InputDecoration(
+                  suffixIcon: suffixIcon,
+                )
+              : null,
         ),
       ],
     );

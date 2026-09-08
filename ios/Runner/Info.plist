@@ -67,7 +67,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is needed to scan product barcodes.</string>
+	<string>Camera access is needed to scan product barcodes and motorcycle part numbers via Vision OCR.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is needed to upload product images and shop logos.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -3,6 +3,7 @@ class ProductVisionResult {
   final String? name;
   final String? brand;
   final String? partNumber;
+  final String? model;
   final String? category;
   final double? sellingPrice;
   final double? costPrice;
@@ -16,6 +17,7 @@ class ProductVisionResult {
     this.name,
     this.brand,
     this.partNumber,
+    this.model,
     this.category,
     this.sellingPrice,
     this.costPrice,
@@ -30,6 +32,7 @@ class ProductVisionResult {
     String? name,
     String? brand,
     String? partNumber,
+    String? model,
     String? category,
     double? sellingPrice,
     double? costPrice,
@@ -43,6 +46,7 @@ class ProductVisionResult {
       name: name ?? this.name,
       brand: brand ?? this.brand,
       partNumber: partNumber ?? this.partNumber,
+      model: model ?? this.model,
       category: category ?? this.category,
       sellingPrice: sellingPrice ?? this.sellingPrice,
       costPrice: costPrice ?? this.costPrice,

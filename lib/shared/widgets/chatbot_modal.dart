@@ -8,6 +8,8 @@ import '../../core/providers.dart';
 import '../../core/router/route_paths.dart';
 import '../../core/services/chatbot/chatbot_engine.dart';
 import '../../core/services/chatbot/chatbot_models.dart';
+import '../../core/services/vision/ocr/part_number_ocr_scanner.dart';
+import '../../core/services/voice/voice_assistant_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/stock_health.dart';
 import '../../data/models/product.dart';
@@ -79,6 +81,7 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
   final FocusNode _inputFocusNode = FocusNode();
 
   final List<ChatMessage> _messages = [];
+  bool _isListening = false;
 
   static const List<({String label, String query, IconData icon, String subtitle})> _quickActions = [
     (
@@ -160,6 +163,9 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
 
   @override
   void dispose() {
+    if (_isListening) {
+      ref.read(voiceAssistantServiceProvider).stopListening();
+    }
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -176,6 +182,64 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
         );
       }
     });
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    final voiceService = ref.read(voiceAssistantServiceProvider);
+
+    if (_isListening) {
+      await voiceService.stopListening();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+
+    setState(() => _isListening = true);
+
+    final started = await voiceService.startListening(
+      onResult: (text, isFinal) {
+        if (!mounted) return;
+        _inputController.text = text;
+        if (isFinal) {
+          setState(() => _isListening = false);
+          _handleSendMessage(text);
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.mic_off_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(error)),
+              ],
+            ),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      },
+    );
+
+    if (!started && mounted) {
+      setState(() => _isListening = false);
+    }
+  }
+
+  Future<void> _scanPartWithCamera() async {
+    final scanned = await PartNumberOcrScanner.scan(
+      context,
+      title: 'Scan Part # for Assistant',
+      subtitle: 'Scan a motorcycle part label to check stock and specs',
+    );
+
+    if (scanned != null && mounted) {
+      final query = 'Check stock for $scanned';
+      _inputController.text = query;
+      _handleSendMessage(query);
+    }
   }
 
   void _handleSendMessage(String text) {
@@ -418,7 +482,59 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
           ),
         ],
 
-        // ── Input Row (Pure Text Chat, Synced with Nav Bar) ───────────
+        // ── Voice Listening Indicator Banner ─────────────────────────
+        if (_isListening)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Listening... speak your query (e.g. "sales today", "stock of motul")',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: _toggleVoiceInput,
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      'Stop',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Input Row (Voice, Camera OCR, and Text Input) ─────────────
         Padding(
           padding: EdgeInsets.only(
             left: 16,
@@ -439,9 +555,10 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
                           .withValues(alpha: 0.3),
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Row(
                     children: [
+                      const SizedBox(width: 4),
                       const Icon(
                         Icons.chat_bubble_outline_rounded,
                         size: 18,
@@ -456,16 +573,23 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
                             color: AppColors.textPrimary,
                             fontSize: 14,
                           ),
-                          decoration: const InputDecoration(
-                            hintText: 'Ask or calculate (e.g. 10% off 1500)...',
+                          decoration: InputDecoration(
+                            hintText: _isListening
+                                ? 'Listening... speak now'
+                                : 'Ask or calculate (e.g. 10% off 1500)...',
                             hintStyle: TextStyle(
-                              color: AppColors.textSecondary,
+                              color: _isListening
+                                  ? AppColors.accent
+                                  : AppColors.textSecondary,
                               fontSize: 13,
+                              fontStyle: _isListening
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
                             ),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding:
-                                EdgeInsets.symmetric(vertical: 12),
+                                const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onSubmitted: _handleSendMessage,
                         ),
@@ -479,6 +603,29 @@ class _ChatbotModalState extends ConsumerState<ChatbotModal> {
                             setState(() {});
                           },
                         ),
+                      // Camera OCR Button
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                        color: AppColors.textSecondary,
+                        tooltip: 'Scan Part # (Camera OCR)',
+                        onPressed: _scanPartWithCamera,
+                      ),
+                      // Microphone Voice Button
+                      IconButton(
+                        icon: Icon(
+                          _isListening
+                              ? Icons.mic_rounded
+                              : Icons.mic_none_rounded,
+                          size: 20,
+                        ),
+                        color: _isListening
+                            ? AppColors.accent
+                            : AppColors.textSecondary,
+                        tooltip: _isListening
+                            ? 'Listening... tap to stop'
+                            : 'Voice query',
+                        onPressed: _toggleVoiceInput,
+                      ),
                     ],
                   ),
                 ),

@@ -1,10 +1,10 @@
 /// App version details and repository metadata.
 abstract final class AppVersion {
   /// Current semver version string of the app (matches pubspec.yaml).
-  static const String current = '1.2.3';
+  static const String current = '1.2.4';
 
   /// Current build number (matches pubspec.yaml build suffix).
-  static const int buildNumber = 6;
+  static const int buildNumber = 7;
 
   /// Full version display string: `v1.2.0 (Build 3)`
   static const String displayVersion = 'v$current (Build $buildNumber)';

@@ -118,7 +118,11 @@ class _ProductVisionDialogState extends State<ProductVisionDialog> {
           ? r.costPrice.toString()
           : '',
     );
-    _descriptionController = TextEditingController(text: r.rawText ?? '');
+    _descriptionController = TextEditingController(
+      text: (r.description != null && r.description!.isNotEmpty)
+          ? r.description!
+          : (r.rawText ?? ''),
+    );
 
     if (r.category != null && widget.availableCategories.contains(r.category)) {
       _selectedCategory = r.category;
@@ -344,8 +348,8 @@ class _ProductVisionDialogState extends State<ProductVisionDialog> {
                           const SizedBox(height: 6),
                           Text(
                             hasBarcode
-                                ? 'Barcode detected from package: ${_barcodeController.text}'
-                                : 'Motorcycle part photo captured',
+                                ? 'Barcode & OCR details detected: ${_barcodeController.text}'
+                                : 'AI OCR & Packaging Details Extracted',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -356,7 +360,7 @@ class _ProductVisionDialogState extends State<ProductVisionDialog> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Confidence: ${(widget.initialResult.confidence * 100).clamp(50, 99).toInt()}% • Ready to apply',
+                            'Confidence: ${(widget.initialResult.confidence * 100).clamp(50, 99).toInt()}% • Details extraction only (not saved as photo)',
                             style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 11,
