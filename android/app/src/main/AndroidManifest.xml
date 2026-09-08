@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Haptic feedback on a successful scan. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Voice assistant hands-free commands. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
         android:label="DC Motorshop"

@@ -1,8 +1,8 @@
 // ignore_for_file: prefer_initializing_formals
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -278,14 +278,18 @@ class SupabaseSyncService {
 
     if (settings.logoPath != null && settings.logoPath!.isNotEmpty) {
       if (!settings.logoPath!.startsWith('http')) {
-        final url = await _storage.uploadLogoImage(
-          businessUid: bizId,
-          localPath: settings.logoPath!,
-        );
-        if (url != null) {
-          settings.logoPath = url;
-          await _isar.writeTxn(() => _isar.businessSettings.put(settings));
-          profileData['logo_url'] = url;
+        try {
+          final url = await _storage.uploadLogoImage(
+            businessUid: bizId,
+            localPath: settings.logoPath!,
+          );
+          if (url != null) {
+            settings.logoPath = url;
+            await _isar.writeTxn(() => _isar.businessSettings.put(settings));
+            profileData['logo_url'] = url;
+          }
+        } catch (e) {
+          debugPrint('Failed to upload logo image: $e');
         }
       } else {
         profileData['logo_url'] = settings.logoPath;
@@ -567,6 +571,26 @@ class SupabaseSyncService {
       }
       await _isar.products.putAll(dirty);
     });
+
+    await _uploadPendingImages(dirty);
+  }
+
+  Future<void> _uploadPendingImages(List<Product> products) async {
+    for (final product in products) {
+      if (product.imagePath == null || product.imageUrl != null) continue;
+      try {
+        final url = await _storage.uploadProductImage(
+          productUid: product.uid,
+          localPath: product.imagePath!,
+        );
+        if (url != null) {
+          product.imageUrl = url;
+          await _isar.writeTxn(() => _isar.products.put(product));
+        }
+      } catch (e) {
+        debugPrint('Failed to upload image for product ${product.uid}: $e');
+      }
+    }
   }
 
   Future<void> _pushSales(String bizId) async {
@@ -675,7 +699,7 @@ class SupabaseSyncService {
       query = query.gte('updated_at', since.toUtc().toIso8601String()) as dynamic;
     }
 
-    final rows = await query as List<dynamic>;
+    final rows = await query.limit(500) as List<dynamic>;
     final serverTime = DateTime.now().toUtc();
 
     // NOTE: apply functions perform Isar reads (e.g. category lookups), so
@@ -694,7 +718,7 @@ class SupabaseSyncService {
     try {
       final profile = await _db
           .from('business_profiles')
-          .select()
+          .select('logo_url')
           .eq('id', bizId)
           .maybeSingle();
 
@@ -711,7 +735,7 @@ class SupabaseSyncService {
       // ── Pull calendar days from the normalized table ──────────────────
       final calendarRows = await _db
           .from('business_calendar_days')
-          .select()
+          .select('day, note')
           .eq('business_id', bizId)
           .eq('is_closed', true) as List<dynamic>;
 
@@ -762,7 +786,7 @@ class SupabaseSyncService {
       query = query.gte('updated_at', since.toUtc().toIso8601String()) as dynamic;
     }
 
-    final rows = await query as List<dynamic>;
+    final rows = await query.limit(500) as List<dynamic>;
     final serverTime = DateTime.now().toUtc();
 
     // NOTE: _applySale does Isar reads (to resolve productId), so it cannot
@@ -852,7 +876,7 @@ class SupabaseSyncService {
       try {
         final vRes = await _db
             .from('product_variants')
-            .select()
+            .select('id, variant_name, option1_value, option2_value, barcode, part_number, cost_price, selling_price, stock_on_hand')
             .eq('product_id', rowId)
             .isFilter('deleted_at', null);
         for (final v in (vRes as List)) {

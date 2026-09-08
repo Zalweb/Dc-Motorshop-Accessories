@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/money.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_pressable.dart';
+import '../../../shared/widgets/chatbot_modal.dart';
 import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/skeleton_loader.dart';
 import '../../products/products_screen.dart';
@@ -249,6 +250,35 @@ class DesktopDashboardView extends ConsumerWidget {
                   Icons.keyboard_arrow_down_rounded,
                   size: 16,
                   color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // AI Chatbot pill button
+        AppPressable(
+          onTap: () => ChatbotModal.show(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(color: primary.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.smart_toy_rounded, size: 16, color: primary),
+                const SizedBox(width: 6),
+                Text(
+                  'AI Assistant',
+                  style: TextStyle(
+                    color: primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),

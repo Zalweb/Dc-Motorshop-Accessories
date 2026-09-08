@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
@@ -24,6 +26,17 @@ class SupabaseStorageService {
     return uid;
   }
 
+  Future<Uint8List> _compressImage(Uint8List bytes) async {
+    final compressed = await FlutterImageCompress.compressWithList(
+      bytes,
+      minWidth: 1024,
+      minHeight: 1024,
+      quality: 85,
+      format: CompressFormat.jpeg,
+    );
+    return compressed;
+  }
+
   /// Uploads [localPath] to Supabase Storage and returns the public URL.
   /// Supports local file paths as well as base64 data URLs (`data:...`).
   ///
@@ -42,7 +55,8 @@ class SupabaseStorageService {
       if (localPath.startsWith('data:')) {
         final comma = localPath.indexOf(',');
         final b64 = comma != -1 ? localPath.substring(comma + 1) : localPath;
-        final bytes = Uint8List.fromList(base64Decode(b64));
+        final originalBytes = Uint8List.fromList(base64Decode(b64));
+        final bytes = kIsWeb ? originalBytes : await _compressImage(originalBytes);
         String extension = 'jpg';
         if (localPath.startsWith('data:image/png')) {
           extension = 'png';
@@ -59,7 +73,7 @@ class SupabaseStorageService {
 
         final signedUrl = await _client.storage
             .from(kProductImagesBucket)
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+            .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry on mobile (offline-first)
 
         return signedUrl;
       }
@@ -71,20 +85,24 @@ class SupabaseStorageService {
       final extension = isAllowedImageExtension(rawExtension) ? rawExtension : 'jpg';
       final storagePath = '$authUid/products/$productUid.$extension';
 
-      await _client.storage.from(kProductImagesBucket).upload(
+      final originalBytes = await file.readAsBytes();
+      final bytes = kIsWeb ? originalBytes : await _compressImage(originalBytes);
+
+      await _client.storage.from(kProductImagesBucket).uploadBinary(
             storagePath,
-            file,
-            fileOptions: const FileOptions(upsert: true),
+            bytes,
+            fileOptions: FileOptions(upsert: true, contentType: 'image/$extension'),
           );
 
-      // Signed URL valid for 1 year (365 days).
+      // Signed URL valid for 1 year on mobile (offline-first — URLs cached locally).
       final signedUrl = await _client.storage
           .from(kProductImagesBucket)
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry on mobile (offline-first)
 
       return signedUrl;
-    } catch (_) {
-      return null;
+    } catch (e) {
+      debugPrint('Image upload failed: $e');
+      throw Exception('Image upload failed: $e');
     }
   }
 
@@ -101,7 +119,8 @@ class SupabaseStorageService {
       if (localPath.startsWith('data:')) {
         final comma = localPath.indexOf(',');
         final b64 = comma != -1 ? localPath.substring(comma + 1) : localPath;
-        final bytes = Uint8List.fromList(base64Decode(b64));
+        final originalBytes = Uint8List.fromList(base64Decode(b64));
+        final bytes = kIsWeb ? originalBytes : await _compressImage(originalBytes);
         String extension = 'png';
         if (localPath.startsWith('data:image/jpeg') || localPath.startsWith('data:image/jpg')) {
           extension = 'jpg';
@@ -118,7 +137,7 @@ class SupabaseStorageService {
 
         final signedUrl = await _client.storage
             .from(kProductImagesBucket)
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+            .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry on mobile (offline-first)
 
         return signedUrl;
       }
@@ -130,20 +149,24 @@ class SupabaseStorageService {
       final extension = isAllowedImageExtension(rawExtension) ? rawExtension : 'jpg';
       final storagePath = '$authUid/logos/$businessUid.$extension';
 
-      await _client.storage.from(kProductImagesBucket).upload(
+      final originalBytes = await file.readAsBytes();
+      final bytes = kIsWeb ? originalBytes : await _compressImage(originalBytes);
+
+      await _client.storage.from(kProductImagesBucket).uploadBinary(
             storagePath,
-            file,
-            fileOptions: const FileOptions(upsert: true),
+            bytes,
+            fileOptions: FileOptions(upsert: true, contentType: 'image/$extension'),
           );
 
-      // Signed URL valid for 1 year (365 days).
+      // Signed URL valid for 1 year on mobile (offline-first — URLs cached locally).
       final signedUrl = await _client.storage
           .from(kProductImagesBucket)
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry on mobile (offline-first)
 
       return signedUrl;
-    } catch (_) {
-      return null;
+    } catch (e) {
+      debugPrint('Image upload failed: $e');
+      throw Exception('Image upload failed: $e');
     }
   }
 
@@ -154,8 +177,9 @@ class SupabaseStorageService {
       final storagePath = '$authUid/products/$productUid.$extension';
       return await _client.storage
           .from(kProductImagesBucket)
-          .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
-    } catch (_) {
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry on mobile (offline-first)
+    } catch (e) {
+      debugPrint('Refresh signed URL failed: $e');
       return null;
     }
   }

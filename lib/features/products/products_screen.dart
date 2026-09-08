@@ -15,6 +15,7 @@ import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/filter_chips.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/chatbot_modal.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 
 enum ProductSort {
@@ -72,6 +73,7 @@ class ProductsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductsScreenState extends ConsumerState<ProductsScreen> {
+  final _searchController = TextEditingController();
   String _query = '';
   int _filter = 0; // 0 = All; 1+ = category index
   ProductSort _sort = ProductSort.nameAsc;
@@ -79,6 +81,12 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   ProductTypeFilter _typeFilter = ProductTypeFilter.all;
   String? _selectedBrand;
   bool _addOpen = false; // speed-dial expanded state
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -317,6 +325,17 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
         title: const Text('Products'),
         actions: [
           IconButton(
+            tooltip: 'AI Chatbot & Assistant',
+            onPressed: () => ChatbotModal.show(
+              context,
+              onSearchApplied: (query) {
+                _searchController.text = query;
+                setState(() => _query = query);
+              },
+            ),
+            icon: const Icon(Icons.smart_toy_outlined),
+          ),
+          IconButton(
             tooltip: 'Filter & Sort',
             onPressed: () => _openFilterPanel(context, availableBrands),
             icon: Badge(
@@ -339,8 +358,18 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: SearchField(
+                  controller: _searchController,
                   hint: 'Search products...',
                   onChanged: (v) => setState(() => _query = v),
+                  onVoicePressed: () {
+                    ChatbotModal.show(
+                      context,
+                      onSearchApplied: (query) {
+                        _searchController.text = query;
+                        setState(() => _query = query);
+                      },
+                    );
+                  },
                 ),
               ),
               if (activeFilterCount > 0)

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../supabase/supabase_config.dart';
@@ -36,7 +37,8 @@ class SupabaseStorageServiceWeb {
       final b64 = comma != -1 ? localPath.substring(comma + 1) : localPath;
       try {
         uploadBytes = Uint8List.fromList(base64Decode(b64));
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Failed to decode base64 image: $e');
         return null;
       }
       if (localPath.startsWith('data:image/png')) {
@@ -68,7 +70,8 @@ class SupabaseStorageServiceWeb {
       final b64 = comma != -1 ? localPath.substring(comma + 1) : localPath;
       try {
         uploadBytes = Uint8List.fromList(base64Decode(b64));
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Failed to decode base64 image: $e');
         return null;
       }
       if (localPath.startsWith('data:image/jpeg') || localPath.startsWith('data:image/jpg')) {
@@ -107,8 +110,9 @@ class SupabaseStorageServiceWeb {
             fileOptions: FileOptions(upsert: true, contentType: contentType),
           );
       return _signedUrl(storagePath);
-    } catch (_) {
-      return null;
+    } catch (e) {
+      debugPrint('Web image upload failed: $e');
+      throw Exception('Image upload failed: $e');
     }
   }
 
@@ -116,8 +120,9 @@ class SupabaseStorageServiceWeb {
     try {
       return await _client.storage
           .from(kProductImagesBucket)
-          .createSignedUrl(path, 60 * 60 * 24 * 365);
-    } catch (_) {
+          .createSignedUrl(path, 60 * 60 * 24); // 24-hour expiry on web
+    } catch (e) {
+      debugPrint('Web signed URL generation failed: $e');
       return null;
     }
   }

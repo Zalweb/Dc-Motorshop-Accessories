@@ -9,6 +9,8 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
 import '../../shared/widgets/glass_container.dart';
 import '../../shared/widgets/metric_card.dart';
+import '../../core/theme/app_colors.dart';
+import '../../shared/widgets/chatbot_modal.dart';
 import '../../shared/widgets/shop_logo.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/staggered_entrance.dart';
@@ -242,6 +244,23 @@ class DashboardScreen extends ConsumerWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'AI Chatbot & Assistant',
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: const Icon(
+                      Icons.smart_toy_outlined,
+                      size: 20,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                  onPressed: () => ChatbotModal.show(context),
                 ),
               ],
             ),

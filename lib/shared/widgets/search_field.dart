@@ -12,6 +12,7 @@ class SearchField extends StatelessWidget {
     this.onChanged,
     this.onSubmitted,
     this.trailing,
+    this.onVoicePressed,
   });
 
   final String hint;
@@ -21,6 +22,7 @@ class SearchField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final Widget? trailing;
+  final VoidCallback? onVoicePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +42,13 @@ class SearchField extends StatelessWidget {
                 Icons.search,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
+              suffixIcon: onVoicePressed != null
+                  ? IconButton(
+                      icon: const Icon(Icons.mic_rounded, color: Color(0xFF3B82F6)),
+                      tooltip: 'Voice Search & AI Assistant',
+                      onPressed: onVoicePressed,
+                    )
+                  : null,
             ),
           ),
         ),

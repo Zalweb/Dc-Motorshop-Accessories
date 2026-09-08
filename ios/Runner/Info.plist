@@ -70,6 +70,9 @@
 	<string>Camera access is needed to scan product barcodes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is needed to upload product images and shop logos.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition is used to search inventory and ask sales questions hands-free.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed for hands-free voice commands.</string>
 </dict>
-
 </plist>

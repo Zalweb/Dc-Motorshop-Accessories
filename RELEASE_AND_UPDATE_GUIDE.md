@@ -168,3 +168,12 @@ Remove-Item "MoSPAMS.1.3.apk" -Force
 | GitHub API returns 403 / Rate limit | Unauthenticated client exceeded 60 req/hr | App will automatically fall back to Supabase config and use cached data. |
 | Android shows "Install unknown apps" prompt | User's browser doesn't have sideloading permission | Normal Android OS security behavior. User toggles "Allow from this source" once. |
 | App crashes on launch after update | Broken Isar schema migration | Run `dart run build_runner build` before building APK, and never rename non-nullable fields without default values. |
+
+## 6. Changelog
+
+### v1.2.1+4
+- Fixed silent image upload failures.
+- Added limit(500) to unbounded Supabase sync queries.
+- Optimized Supabase queries to fetch explicit columns.
+- Implemented split-screen POS layout for wide screens.
+- Added flutter_image_compress for pre-upload compression.

@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/sale.dart';
+import '../../shared/widgets/chatbot_modal.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/search_field.dart';
 import '../../shared/widgets/skeleton_loader.dart';
@@ -159,6 +160,11 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
       appBar: AppBar(
         title: const Text('Sales History'),
         actions: [
+          IconButton(
+            tooltip: 'AI Chatbot & Assistant',
+            onPressed: () => ChatbotModal.show(context),
+            icon: const Icon(Icons.smart_toy_outlined),
+          ),
           IconButton(
             tooltip: 'Export to Excel',
             onPressed: sales == null

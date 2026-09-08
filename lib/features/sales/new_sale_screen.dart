@@ -13,6 +13,7 @@ import '../../shared/widgets/barcode_scanner_screen.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/floating_add_popup.dart';
 import '../../shared/widgets/search_field.dart';
+import '../../shared/widgets/chatbot_modal.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/tactile_button.dart';
 import 'cart_controller.dart';
@@ -250,28 +251,58 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
       bindings: shortcuts,
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 800;
+            final mainContent = SafeArea(
         child: Column(
           children: [
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'New Sale',
-                    style: AppTextStyles.headingMedium.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'New Sale',
+                        style: AppTextStyles.headingMedium.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        'Select items to add to cart',
+                        style: AppTextStyles.body.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Select items to add to cart',
-                    style: AppTextStyles.body.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontSize: 13,
+                  IconButton(
+                    tooltip: 'AI Chatbot & Assistant',
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(
+                        Icons.smart_toy_outlined,
+                        size: 20,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    onPressed: () => ChatbotModal.show(
+                      context,
+                      onSearchApplied: (query) {
+                        _searchController.text = query;
+                        setState(() => _query = query);
+                      },
                     ),
                   ),
                 ],
@@ -289,6 +320,15 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                 focusNode: _searchFocusNode,
                 onChanged: (v) => setState(() => _query = v),
                 onSubmitted: (code) => _handleBarcodeSubmitted(code, products),
+                onVoicePressed: () {
+                  ChatbotModal.show(
+                    context,
+                    onSearchApplied: (query) {
+                      _searchController.text = query;
+                      setState(() => _query = query);
+                    },
+                  );
+                },
                 trailing: IconButton.filled(
                   onPressed: () => _scanToAdd(products),
                   icon: const Icon(Icons.qr_code_scanner, size: 20),
@@ -346,7 +386,6 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                 skipLoadingOnRefresh: true,
                 loading: () {
                   final screenWidth = MediaQuery.sizeOf(context).width;
-                  final isWide = screenWidth >= 800;
                   final crossAxisCount = isWide
                       ? (screenWidth >= 1400 ? 5 : (screenWidth >= 1100 ? 4 : 3))
                       : 2;
@@ -384,7 +423,6 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                     );
                   }
                   final screenWidth = MediaQuery.sizeOf(context).width;
-                  final isWide = screenWidth >= 800;
                   final crossAxisCount = isWide ? (screenWidth >= 1400 ? 5 : (screenWidth >= 1100 ? 4 : 3)) : 2;
 
                   return GridView.builder(
@@ -444,17 +482,27 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
             ),
           ],
         ),
-      ),
+      );
 
-      // Floating cart bar
-      floatingActionButton: itemCount > 0
-          ? _FloatingCartBar(
-              itemCount: itemCount,
-              total: cartTotal,
-              onTap: _openCart,
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+            return Scaffold(
+              body: isWide
+                  ? Row(
+                      children: [
+                        Expanded(flex: 3, child: mainContent),
+                        const Expanded(flex: 2, child: CartSheet(isSidebar: true)),
+                      ],
+                    )
+                  : mainContent,
+              floatingActionButton: (!isWide && itemCount > 0)
+                  ? _FloatingCartBar(
+                      itemCount: itemCount,
+                      total: cartTotal,
+                      onTap: _openCart,
+                    )
+                  : null,
+              floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+            );
+          },
         ),
       ),
     );
